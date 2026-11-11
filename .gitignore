@@ -1,0 +1,23 @@
+# Dependencies and build output
+node_modules/
+dist/
+out/
+release/
+*.log
+
+# Environment and secrets
+.env
+.env.*
+
+# Local tooling / editor
+.claude/
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Scratch notes
+New Text Document.txt
