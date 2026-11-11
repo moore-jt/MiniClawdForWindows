@@ -1,3 +1,7 @@
 html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
 #strip { position: relative; width: 100%; height: 100%; }
-.clawd { position: absolute; left: 24px; bottom: 0; }
+.clawd { position: absolute; bottom: 0; transition: left 0.2s ease-out; }
+/* Placeholder state cues until milestone 4 adds real animations. */
+.clawd[data-state="working"]   { filter: brightness(1.15); }
+.clawd[data-state="needs-you"] { filter: hue-rotate(-30deg) saturate(1.6); }
+.clawd[data-state="done"]      { filter: hue-rotate(80deg); }

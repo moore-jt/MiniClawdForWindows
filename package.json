@@ -7,7 +7,8 @@
   "scripts": {
     "build": "tsc && node scripts/copy-static.js",
     "start": "npm run build && electron .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:bus": "node scripts/test-bus.js"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",

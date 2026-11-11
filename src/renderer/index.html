@@ -2,12 +2,14 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="strip">
-    <!-- One static clawd: original 10x5 pixel art, scaled up with crisp edges. -->
+  <div id="strip"></div>
+
+  <!-- One clawd: original 10x5 pixel art, scaled up with crisp edges. -->
+  <template id="clawd-template">
     <svg class="clawd" viewBox="0 0 10 5" width="40" height="20" shape-rendering="crispEdges">
       <g fill="#d9774f">
         <rect x="2" y="0" width="6" height="1"/>
@@ -22,6 +24,8 @@
         <rect x="6" y="1" width="1" height="1"/>
       </g>
     </svg>
-  </div>
+  </template>
+
+  <script src="renderer.js"></script>
 </body>
 </html>

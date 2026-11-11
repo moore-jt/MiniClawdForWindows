@@ -32,7 +32,7 @@ A tiny hook script POSTs `{session_id, event, cwd, pid}` to `localhost:<port>`, 
 ## Milestones
 
 1. **Skeleton (done, pending visual check):** an overlay window pinned just above the taskbar using `screen.getPrimaryDisplay()` bounds minus `workArea`, with one static clawd.
-2. **Event bus:** a localhost HTTP listener, and a curl test that adds and removes clawds.
+2. **Event bus (done):** a localhost HTTP listener, and a curl test that adds and removes clawds.
 3. **Hook script and installer:** a command that merges the hooks into `~/.claude/settings.json`, with an uninstall option.
 4. **State machine and animations:** idle, working, needs-you, done, each with a transition.
 5. **Layout:** clawds spaced along the strip, a hover tooltip with the project folder name (from `cwd`), and a tint or hat per project so agents are distinguishable.
@@ -51,14 +51,18 @@ A tiny hook script POSTs `{session_id, event, cwd, pid}` to `localhost:<port>`, 
 
 ## Status (for resuming work)
 
-**Milestone 1: code complete, position not yet visually verified.** Last session ended with the app launching cleanly (no errors for 8s), but nobody has confirmed on screen that the strip lines up with the taskbar or that clicks pass through it.
+**Milestones 1 and 2: code complete.** Milestone 2 (event bus) was verified over HTTP: `/health` returns 200, valid events return 204, bad events/bodies return 400, no app errors. The user launched `npm start` and the app ran, but on-screen behavior (strip aligned with the taskbar, click-through, clawds visibly appearing/disappearing/changing color) has not been explicitly confirmed. Ask the user.
 
 What exists:
-- `src/main.ts`: transparent, frameless, always-on-top, click-through, non-focusable window. 48px tall, full width of the primary display's `workArea`, bottom-aligned (just above the taskbar). Re-pins on `display-metrics-changed`, `display-added`, `display-removed`.
-- `src/renderer/`: `index.html`, `style.css`, one static original 10x5 pixel-art clawd as inline SVG (40x20px, bottom-left of the strip).
+- `src/main.ts`: transparent, frameless, always-on-top, click-through, non-focusable window. 48px tall, full width of the primary display's `workArea`, bottom-aligned (just above the taskbar). Re-pins on `display-metrics-changed`, `display-added`, `display-removed`. Wires the session store, event bus and IPC together.
+- `src/eventBus.ts`: HTTP listener on `127.0.0.1:47821` (localhost only). `POST /event` with `{session_id, event, cwd?, pid?}` returns 204; `GET /health` returns 200; 400 for bad input or unknown events; 64KB body cap.
+- `src/sessions.ts`: `SessionStore` (`Map<session_id, Session>`). Maps `SessionStart`->idle, `UserPromptSubmit`->working, `Notification`->needs-you, `Stop`->done, `SessionEnd`->remove. Emits upsert/remove changes.
+- `src/preload.ts`: exposes `window.clawd` (`onSessions`, `onChange`, `ready`) via `contextBridge`.
+- `src/renderer/`: `index.html` (clawd SVG in a `<template>`), `renderer.ts` (adds/updates/removes clawds, 56px spacing, tooltip text in `data-tip` = last folder of `cwd`), `style.css` (placeholder tints per `data-state`; real animations are milestone 4).
 - `scripts/copy-static.js`: copies non-TS renderer files into `dist/` after `tsc`.
+- `scripts/test-bus.js` (`npm run test:bus`): sends a sequence of events; `node scripts/test-bus.js clear` removes the leftover test clawd.
 
-How to run: `npm install`, then `npm start` (builds, then launches Electron). Quit with Ctrl+C in the terminal (no tray or quit option until milestone 6).
+How to run: `npm install`, then `npm start` (builds, then launches Electron). Then `npm run test:bus` in a second terminal. Quit with Ctrl+C in the terminal (no tray or quit option until milestone 6).
 
 Gotchas:
 - Electron's postinstall binary download can fail or stall on this machine. If `npx electron .` says "Electron failed to install correctly", run `node node_modules/electron/install.js` (takes several minutes).
@@ -66,7 +70,10 @@ Gotchas:
 - The Clawd folder is its own git repo (`origin` = this project's GitHub). The parent home-directory repo has a different remote; never run git from outside this folder.
 - `.claude/` and `New Text Document.txt` are git-ignored on purpose.
 
-**Next up:** confirm the milestone 1 position, then milestone 2 (localhost HTTP event bus with a curl test that adds and removes clawds).
+- The `data-tip` tooltip attribute is set but nothing displays it yet (the window is click-through, so hover needs `setIgnoreMouseEvents(true, {forward: true})` mouse-move handling; planned for milestone 5).
+- The event bus port is fixed at 47821 (`CLAWD_PORT` env var is honored by the test script only). If the port is taken the bus logs an error and the app keeps running without it.
+
+**Next up:** milestone 3, the hook script and installer: a tiny script that POSTs to the bus in the background with a short timeout and fails silently when the app is off, plus an install/uninstall command that merges the hooks into `~/.claude/settings.json`. Keep the merge non-destructive (preserve existing hooks, back up the file first) and test with the app off to confirm Claude is never slowed.
 
 ## Decision
 
