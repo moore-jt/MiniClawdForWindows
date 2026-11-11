@@ -1,0 +1,17 @@
+{
+  "name": "mini-clawd-for-windows",
+  "version": "0.1.0",
+  "description": "Tiny pixel clawds on your Windows taskbar that show what your Claude Code agents are doing.",
+  "license": "MIT",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc && node scripts/copy-static.js",
+    "start": "npm run build && electron .",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "electron": "^45.3.0",
+    "typescript": "^7.0.2"
+  }
+}
