@@ -33,7 +33,7 @@ A tiny hook script POSTs `{session_id, event, cwd, pid}` to `localhost:<port>`, 
 
 1. **Skeleton (done, pending visual check):** an overlay window pinned just above the taskbar using `screen.getPrimaryDisplay()` bounds minus `workArea`, with one static clawd.
 2. **Event bus (done):** a localhost HTTP listener, and a curl test that adds and removes clawds.
-3. **Hook script and installer:** a command that merges the hooks into `~/.claude/settings.json`, with an uninstall option.
+3. **Hook script and installer (code done, not yet installed into the real settings):** a command that merges the hooks into `~/.claude/settings.json`, with an uninstall option.
 4. **State machine and animations:** idle, working, needs-you, done, each with a transition.
 5. **Layout:** clawds spaced along the strip, a hover tooltip with the project folder name (from `cwd`), and a tint or hat per project so agents are distinguishable.
 6. **Native extras:** taskbar flash and overlay badge on done, plus a tray icon with quit, mute and "clear done".
@@ -60,6 +60,8 @@ What exists:
 - `src/preload.ts`: exposes `window.clawd` (`onSessions`, `onChange`, `ready`) via `contextBridge`.
 - `src/renderer/`: `index.html` (clawd SVG in a `<template>`), `renderer.ts` (adds/updates/removes clawds, 56px spacing, tooltip text in `data-tip` = last folder of `cwd`), `style.css` (placeholder tints per `data-state`; real animations are milestone 4).
 - `scripts/copy-static.js`: copies non-TS renderer files into `dist/` after `tsc`.
+- `hooks/clawd-hook.js`: the Claude Code hook. Reads the hook JSON on stdin, POSTs `{session_id, event: hook_event_name, cwd, pid: process.ppid}` to the bus. Prints nothing, always exits 0, 400ms timeout plus a hard 600ms stop. Measured ~113ms total with the app off (mostly Node startup).
+- `scripts/hooks-installer.js` (`npm run hooks:install` / `hooks:uninstall`, options `--settings <path>`, `--dry-run`): merges one hook entry per event (`SessionStart`, `UserPromptSubmit`, `Notification`, `Stop`, `SessionEnd`) into `~/.claude/settings.json`. Entries are identified by `clawd-hook.js` in the command; existing hooks are kept, install is idempotent, the file is backed up to `settings.json.clawd-backup-<timestamp>` before each write, invalid JSON aborts. Command uses forward slashes and quotes, e.g. `node "C:/.../hooks/clawd-hook.js"`. Tested only against a scratch copy (install, re-install, uninstall all correct; round trip is semantically identical, formatting is normalized to 2-space JSON).
 - `scripts/test-bus.js` (`npm run test:bus`): sends a sequence of events; `node scripts/test-bus.js clear` removes the leftover test clawd.
 
 How to run: `npm install`, then `npm start` (builds, then launches Electron). Then `npm run test:bus` in a second terminal. Quit with Ctrl+C in the terminal (no tray or quit option until milestone 6).
@@ -75,7 +77,7 @@ Gotchas:
 - The `data-tip` tooltip attribute is set but nothing displays it yet (the window is click-through, so hover needs `setIgnoreMouseEvents(true, {forward: true})` mouse-move handling; planned for milestone 5).
 - The event bus port is fixed at 47821 (`CLAWD_PORT` env var is honored by the test script only). If the port is taken the bus logs an error and the app keeps running without it.
 
-**Next up:** milestone 3, the hook script and installer: a tiny script that POSTs to the bus in the background with a short timeout and fails silently when the app is off, plus an install/uninstall command that merges the hooks into `~/.claude/settings.json`. Keep the merge non-destructive (preserve existing hooks, back up the file first) and test with the app off to confirm Claude is never slowed.
+**Next up:** (1) with the user's go-ahead, run `npm run hooks:install -- --dry-run` then the real install against `~/.claude/settings.json`, and check that new Claude Code sessions make clawds appear. Hooks are read at session start, so existing sessions need a restart. Confirm the hook command actually runs under Claude Code on Windows (shell and path quoting). (2) Then milestone 4: state machine and animations (idle, working, needs-you, done, each with a transition).
 
 ## Decision
 

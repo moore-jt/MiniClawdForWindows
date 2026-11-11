@@ -8,7 +8,9 @@
     "build": "tsc && node scripts/copy-static.js",
     "start": "npm run build && electron .",
     "typecheck": "tsc --noEmit",
-    "test:bus": "node scripts/test-bus.js"
+    "test:bus": "node scripts/test-bus.js",
+    "hooks:install": "node scripts/hooks-installer.js install",
+    "hooks:uninstall": "node scripts/hooks-installer.js uninstall"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
