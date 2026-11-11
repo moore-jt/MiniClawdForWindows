@@ -51,7 +51,7 @@ A tiny hook script POSTs `{session_id, event, cwd, pid}` to `localhost:<port>`, 
 
 ## Status (for resuming work)
 
-**Milestones 1 and 2: code complete.** Milestone 2 (event bus) was verified over HTTP: `/health` returns 200, valid events return 204, bad events/bodies return 400, no app errors. The user launched `npm start` and the app ran, but on-screen behavior (strip aligned with the taskbar, click-through, clawds visibly appearing/disappearing/changing color) has not been explicitly confirmed. Ask the user.
+**Milestones 1 and 2: code complete.** Milestone 2 (event bus) was verified over HTTP: `/health` returns 200, valid events return 204, bad events/bodies return 400, no app errors. The user confirmed on screen: a clawd appears at the bottom left just above the taskbar and turns green on `Stop`. Click-through and removal were not explicitly confirmed.
 
 What exists:
 - `src/main.ts`: transparent, frameless, always-on-top, click-through, non-focusable window. 48px tall, full width of the primary display's `workArea`, bottom-aligned (just above the taskbar). Re-pins on `display-metrics-changed`, `display-added`, `display-removed`. Wires the session store, event bus and IPC together.
@@ -69,6 +69,8 @@ Gotchas:
 - The Content-Security-Policy in `index.html` is `default-src 'self'`; inline scripts will be blocked, so put renderer JS in its own file.
 - The Clawd folder is its own git repo (`origin` = this project's GitHub). The parent home-directory repo has a different remote; never run git from outside this folder.
 - `.claude/` and `New Text Document.txt` are git-ignored on purpose.
+- `main.ts` takes a single-instance lock. If `npm start` prints "already running; exiting this copy" (plus cache 'Access is denied' errors), stray Electron processes are alive: run `taskkill //F //IM electron.exe` (double slashes in Git Bash) and start again. Backgrounded `npm start` runs leave orphans when stopped.
+- The strip is empty until an event arrives (no static clawd since milestone 2); use `npm run test:bus` to see it.
 
 - The `data-tip` tooltip attribute is set but nothing displays it yet (the window is click-through, so hover needs `setIgnoreMouseEvents(true, {forward: true})` mouse-move handling; planned for milestone 5).
 - The event bus port is fixed at 47821 (`CLAWD_PORT` env var is honored by the test script only). If the port is taken the bus logs an error and the app keeps running without it.

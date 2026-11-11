@@ -53,7 +53,14 @@ function reposition() {
   strip?.setBounds(stripBounds());
 }
 
+// Only one strip at a time: a second launch would fight over the port and cache.
+if (!app.requestSingleInstanceLock()) {
+  console.error('[clawd] already running; exiting this copy');
+  app.quit();
+}
+
 app.whenReady().then(() => {
+  if (!app.hasSingleInstanceLock()) return;
   createStrip();
   startEventBus(store);
   // Re-pin when the taskbar, resolution or DPI changes.
