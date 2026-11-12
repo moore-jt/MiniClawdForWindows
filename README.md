@@ -18,7 +18,7 @@ Run five Claude Code sessions at once and you'll eventually forget which one is 
 | ✅ **Done** | Jumps three times, then goes sleepy-eyed with a green check. |
 | 👋 **Session ends** | Walks off to the right and fades out. Goodbye! |
 
-Every session gets its own color, and hovering a clawd shows its project folder. Clicks anywhere else pass straight through to your apps.
+Every session gets its own color, and hovering a clawd shows its project folder. **Click a clawd to bring its terminal window to the front** (if the window can't be found, the clawd shakes). In Windows Terminal this raises the window but can't pick the tab. Clicks anywhere else pass straight through to your apps.
 
 ## Install
 

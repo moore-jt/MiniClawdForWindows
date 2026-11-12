@@ -2,12 +2,15 @@ import { app, BrowserWindow, ipcMain, screen } from 'electron';
 import * as path from 'path';
 import { SessionStore } from './sessions';
 import { startEventBus } from './eventBus';
+import { focusSessionWindow, forgetSessionWindow, warmUpFocusHelper, stopFocusHelper, prefetchSessionWindow } from './windowFocus';
 
 const STRIP_HEIGHT = 72; // 36px clawd + room above it for the hover tooltip
 
 let strip: BrowserWindow | null = null;
 
 const store = new SessionStore((change) => {
+  if (change.type === 'remove') forgetSessionWindow(change.id);
+  else prefetchSessionWindow(change.session.id, change.session.pid).catch(() => {});
   strip?.webContents.send('sessions:change', change);
 });
 
@@ -18,6 +21,12 @@ ipcMain.on('renderer:ready', (e) => e.sender.send('sessions:init', store.list())
 // Forwarded mouse-moves still reach the renderer while ignoring, so it can tell us when to switch.
 ipcMain.on('strip:hover', (_e, over: boolean) => {
   strip?.setIgnoreMouseEvents(!over, { forward: true });
+});
+
+// Click on a clawd: raise the terminal window hosting that session.
+ipcMain.handle('session:focus', (_e, id: unknown) => {
+  const s = typeof id === 'string' ? store.list().find((x) => x.id === id) : undefined;
+  return s ? focusSessionWindow(s.id, s.pid) : false;
 });
 
 /** Rectangle for the strip: full width of the work area, sitting just above the taskbar. */
@@ -68,6 +77,7 @@ if (!app.requestSingleInstanceLock()) {
 app.whenReady().then(() => {
   if (!app.hasSingleInstanceLock()) return;
   createStrip();
+  warmUpFocusHelper();
   startEventBus(store);
   // Re-pin when the taskbar, resolution or DPI changes.
   screen.on('display-metrics-changed', reposition);
@@ -76,3 +86,4 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => app.quit());
+app.on('will-quit', stopFocusHelper);

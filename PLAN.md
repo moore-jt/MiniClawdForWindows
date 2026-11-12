@@ -44,12 +44,26 @@ A tiny hook script POSTs `{session_id, event, cwd, pid}` to `localhost:<port>`, 
    - **Robustness:** if the saved display is unplugged, fall back to the primary display's default spot. Re-clamp on `display-metrics-changed`. Mixed-DPI multi-monitor `setBounds` rounding needs testing.
    - **Later:** drag a single clawd out of the strip, or a vertical layout.
    - **Decided:** the whole strip moves together (not each clawd independently).
+5c. **Click a clawd to focus its terminal (done, verified on screen by the user; depends on 5's hit-testing):** Built in `src/windowFocus.ts` (one-shot PowerShell: walk parent chain, restore, Alt-tap, `SetForegroundWindow`; hwnd cached per session), `session:focus` IPC, click handler and shake in the renderer, and "click to open" in the tooltip. Spike script: `node scripts/window-chain.js [pid]`.
+   - **Key finding:** the hook's `pid` (`process.ppid`) is a short-lived shell that is dead by click time, so walking up from it fails. Instead `windowFocus.ts` reads Claude Code's own `~/.claude/sessions/<pid>.json` (`{pid, sessionId, cwd, ...}`) to find the live `claude.exe` for the session id, and walks up from that (claude.exe -> powershell -> WindowsTerminal). Zero cost to Claude, no hook change. The hook pid is only a fallback. Risk: that file is an internal, undocumented format and could change in a future Claude Code version.
+   - **Speed:** the one-shot PowerShell took 1-1.5s per click (mostly startup and `Add-Type` compile). Replaced by one persistent hidden PowerShell (started at app launch, line protocol over stdin/stdout, restarted automatically if it dies or hangs) and a prefetch that resolves each session's terminal window when its clawd first appears. Headless timings: ~730ms for an unprefetched first walk, 2-7ms once the window handle is cached, ~6ms for a first click after prefetch. Awaiting the user's on-screen check of the speedup.
+   - Original plan notes follow. clicking a clawd brings that session's terminal window to the front. This is the "click a clawd to focus its terminal" stretch goal from milestone 8, pulled forward.
+   - **Decided:** a click only focuses. It does not dismiss a done clawd (done stays until the next event). Window lookup uses a one-shot hidden PowerShell with `Add-Type` P/Invoke for v1; `koffi` is a possible later swap if ~300-500ms feels slow.
+   - **Click wiring:** `click` handler on `.clawd:not(.leaving)` in `renderer.ts` calls a new `clawd.focus(sessionId)` (add to `preload.ts`); `main.ts` handles `ipcMain.on('session:focus')`. Add `cursor: pointer`. Ignore the click if it ended a drag (compatible with 5b's edit mode).
+   - **Finding the window (new `src/windowFocus.ts`):** the hook's `pid` is `process.ppid`, which may be an intermediate shell (`cmd`/`bash`), not the terminal. Walk up the parent-process chain (CIM `Win32_Process` `ParentProcessId`) to the first ancestor with a visible top-level window (`MainWindowHandle != 0`): `WindowsTerminal.exe`, `Code.exe`, `conhost`, etc.
+   - **Bringing it forward:** `ShowWindow(SW_RESTORE)` if minimized, then `SetForegroundWindow`. A click on our own overlay counts as user input, which normally grants the right; fallback is the `keybd_event` Alt-tap or `AttachThreadInput` trick. The overlay is `focusable: false`, so it never steals focus itself.
+   - **Caching:** resolve the handle lazily on first click, store it on the session, re-resolve if it is no longer valid (terminal closed and reopened).
+   - **Windows Terminal tabs:** all tabs share one window, so v1 raises the window but cannot pick the tab (that needs UI Automation, which is fragile). Document this in the README. Later idea: match the tab by its title, which Claude Code sets from the project.
+   - **Failures:** dead pid or no window found gives a brief shake on the clawd (optionally "window not found" in the tooltip). Never throw into the main process. Log the ancestor chain for debugging.
+   - **Polish:** tooltip becomes `folder · state · click to open`; update the README and mark the milestone 8 stretch item done.
+   - **Verification:** a script (like `scripts/snapshot.js`) that takes a pid and prints the resolved window handle and title, runnable without the UI. Manual checks: Windows Terminal behind another app, Windows Terminal minimized, VS Code integrated terminal. Regression: clicks outside clawds still pass through, and `npm run snapshot` still renders.
+   - **Risks:** the hook's `ppid` may not sit under the visible terminal (biggest unknown, so the first step is a spike printing the ancestor chain from a real session); Windows Terminal tabs; foreground-lock failures where the window only flashes in the taskbar; elevated terminals can't be focused by a non-elevated app.
 6. **Native extras:** taskbar flash and overlay badge on done, plus a tray icon with quit, mute and "clear done".
 7. **Robustness:**
    - Sessions with a dead PID or no events for N minutes are garbage-collected.
    - Handle multi-monitor setups, an auto-hidden taskbar, DPI scaling, and fullscreen apps (hide the strip or fall back to the badge).
    - Launch at login.
-8. **Stretch goals:** click a clawd to focus its terminal window (needs a window-handle lookup from the PID), sounds, and subagent mini-clawds.
+8. **Stretch goals:** sounds, and subagent mini-clawds. (Click-to-focus moved to milestone 5c.)
 
 ## Risks
 

@@ -5,6 +5,7 @@ declare const clawd: {
   onSessions(cb: (s: Session[]) => void): void;
   onChange(cb: (c: Change) => void): void;
   hover(over: boolean): void;
+  focus(id: string): Promise<boolean>;
   ready(): void;
 };
 
@@ -73,12 +74,25 @@ function upsert(s: Session) {
       if (e.target === el && e.animationName === 'pop') el!.classList.remove('appear');
     });
     el.style.setProperty('--tint', pickTint(s.id));
+    const sessionId = s.id;
+    el.addEventListener('click', async () => {
+      const ok = await clawd.focus(sessionId);
+      if (!ok) {
+        // Window not found: shake the clawd.
+        el!.classList.remove('shake');
+        void el!.offsetWidth; // restart the animation
+        el!.classList.add('shake');
+        el!.addEventListener('animationend', (e) => {
+          if (e.animationName === 'shake') el!.classList.remove('shake');
+        }, { once: true });
+      }
+    });
     strip.appendChild(el);
     order.push(s.id);
   }
   el.dataset.state = s.state;
   const folder = (s.cwd ?? '').split(/[\\/]/).filter(Boolean).pop() ?? s.id.slice(0, 8);
-  el.setAttribute('data-tip', `${folder} · ${s.state}`);
+  el.setAttribute('data-tip', `${folder} · ${s.state} · click to open`);
   layout();
 }
 

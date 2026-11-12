@@ -9,6 +9,16 @@ html, body { margin: 0; height: 100%; background: transparent; overflow: hidden;
   transform-origin: 50% 100%;
   transition: left 0.2s ease-out;
 }
+.clawd:not(.leaving) { cursor: pointer; }
+/* "Couldn't find that session's window": quick side-to-side shake. */
+.clawd.shake { animation: shake 0.3s steps(6, end); }
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
 .sprite { display: block; }
 /* Per-session body color (set from renderer.ts); CSS beats the SVG fill attributes. */
 .clawd .arm, .clawd .body, .clawd .legs { fill: var(--tint, #d9774f); }
