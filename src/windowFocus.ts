@@ -35,15 +35,37 @@ Add-Type -Namespace W -Name N -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);
 [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
 [DllImport("user32.dll")] public static extern void keybd_event(byte k, byte s, uint f, UIntPtr e);
+[DllImport("kernel32.dll")] public static extern bool FreeConsole();
+[DllImport("kernel32.dll")] public static extern bool AttachConsole(uint p);
+[DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow();
+[DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr h, uint f);
+[DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
 '@
+# The window of the console a process is attached to. Works for Windows Terminal (ConPTY) and
+# classic conhost windows, including shells launched from Explorer whose ancestors own no window.
+function ConsoleHwnd($p) {
+  if (-not $p) { return [IntPtr]::Zero }
+  [W.N]::FreeConsole() | Out-Null
+  $c = [IntPtr]::Zero
+  if ([W.N]::AttachConsole([uint32]$p)) { $c = [W.N]::GetConsoleWindow(); [W.N]::FreeConsole() | Out-Null }
+  if ($c -eq [IntPtr]::Zero) { return $c }
+  $r = [W.N]::GetAncestor($c, 3)
+  if ($r -ne [IntPtr]::Zero -and [W.N]::IsWindowVisible($r)) { return $r }
+  return [IntPtr]::Zero
+}
 function Focus($cached, $p, $resolveOnly) {
   $h = [IntPtr]::Zero
   if ($cached -ne 0 -and [W.N]::IsWindow([IntPtr]$cached)) { $h = [IntPtr]$cached }
   else {
+    $h = ConsoleHwnd $p
+  }
+  if ($h -eq [IntPtr]::Zero) {
     $seen = @{}
     while ($p -and -not $seen[$p]) {
       $seen[$p] = $true
       $g = Get-Process -Id $p
+      # explorer owns the desktop/taskbar window; matching it would focus the wrong thing.
+      if ($g -and $g.ProcessName -eq 'explorer') { break }
       if ($g -and $g.MainWindowHandle -ne 0) { $h = $g.MainWindowHandle; break }
       $c = Get-CimInstance Win32_Process -Filter "ProcessId=$p"
       if (-not $c) { break }
