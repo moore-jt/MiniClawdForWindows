@@ -31,15 +31,15 @@ const send = async (id, event, cwd) => {
     return;
   }
   await send('test-a', 'SessionStart', 'C:\\projects\\alpha');
-  await sleep(800);
+  await sleep(2500);
   await send('test-b', 'SessionStart', 'C:\\projects\\beta');
-  await sleep(800);
+  await sleep(2500);
   await send('test-a', 'UserPromptSubmit', 'C:\\projects\\alpha');
-  await sleep(800);
+  await sleep(2500);
   await send('test-b', 'Notification', 'C:\\projects\\beta');
-  await sleep(800);
+  await sleep(2500);
   await send('test-a', 'Stop', 'C:\\projects\\alpha');
-  await sleep(800);
+  await sleep(2500);
   await send('test-b', 'SessionEnd');
   console.log('bad event ->', await post({ session_id: 'x', event: 'Nope' }));
   console.log('bad body  ->', await post({ nope: true }));

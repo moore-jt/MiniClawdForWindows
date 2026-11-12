@@ -34,7 +34,7 @@ A tiny hook script POSTs `{session_id, event, cwd, pid}` to `localhost:<port>`, 
 1. **Skeleton (done, pending visual check):** an overlay window pinned just above the taskbar using `screen.getPrimaryDisplay()` bounds minus `workArea`, with one static clawd.
 2. **Event bus (done):** a localhost HTTP listener, and a curl test that adds and removes clawds.
 3. **Hook script and installer (code done, not yet installed into the real settings):** a command that merges the hooks into `~/.claude/settings.json`, with an uninstall option.
-4. **State machine and animations:** idle, working, needs-you, done, each with a transition.
+4. **State machine and animations (code done, awaiting on-screen check):** idle, working, needs-you, done, each with a transition.
 5. **Layout:** clawds spaced along the strip, a hover tooltip with the project folder name (from `cwd`), and a tint or hat per project so agents are distinguishable.
 6. **Native extras:** taskbar flash and overlay badge on done, plus a tray icon with quit, mute and "clear done".
 7. **Robustness:**
@@ -62,6 +62,8 @@ What exists:
 - `scripts/copy-static.js`: copies non-TS renderer files into `dist/` after `tsc`.
 - `hooks/clawd-hook.js`: the Claude Code hook. Reads the hook JSON on stdin, POSTs `{session_id, event: hook_event_name, cwd, pid: process.ppid}` to the bus. Prints nothing, always exits 0, 400ms timeout plus a hard 600ms stop. Measured ~113ms total with the app off (mostly Node startup).
 - `scripts/hooks-installer.js` (`npm run hooks:install` / `hooks:uninstall`, options `--settings <path>`, `--dry-run`): merges one hook entry per event (`SessionStart`, `UserPromptSubmit`, `Notification`, `Stop`, `SessionEnd`) into `~/.claude/settings.json`. Entries are identified by `clawd-hook.js` in the command; existing hooks are kept, install is idempotent, the file is backed up to `settings.json.clawd-backup-<timestamp>` before each write, invalid JSON aborts. Command uses forward slashes and quotes, e.g. `node "C:/.../hooks/clawd-hook.js"`. Tested only against a scratch copy (install, re-install, uninstall all correct; round trip is semantically identical, formatting is normalized to 2-space JSON).
+- Milestone 4 animations live in `src/renderer/style.css` (stepped CSS keyframes on SVG parts defined in `index.html`'s `<template>`): idle = slow bob + blink; working = fast bounce, typing arms, shuffling feet; needs-you = hop, waving arm, flashing red "!"; done = 3 jumps with arms up, then sleepy eyes and a green check that stays; appear = 4-step pop-in; leaving (SessionEnd) = walks right 160px and fades, then the DOM node is removed (`renderer.ts`). The state machine itself is just last-event-wins in `sessions.ts`.
+- `scripts/snapshot.js` (`npm run snapshot`, writes PNGs to a dir you pass as the first arg): renders the real renderer in a hidden window with fake sessions so animations can be checked without watching the screen.
 - `scripts/test-bus.js` (`npm run test:bus`): sends a sequence of events; `node scripts/test-bus.js clear` removes the leftover test clawd.
 
 How to run: `npm install`, then `npm start` (builds, then launches Electron). Then `npm run test:bus` in a second terminal. Quit with Ctrl+C in the terminal (no tray or quit option until milestone 6).
@@ -77,7 +79,7 @@ Gotchas:
 - The `data-tip` tooltip attribute is set but nothing displays it yet (the window is click-through, so hover needs `setIgnoreMouseEvents(true, {forward: true})` mouse-move handling; planned for milestone 5).
 - The event bus port is fixed at 47821 (`CLAWD_PORT` env var is honored by the test script only). If the port is taken the bus logs an error and the app keeps running without it.
 
-**Next up:** (1) with the user's go-ahead, run `npm run hooks:install -- --dry-run` then the real install against `~/.claude/settings.json`, and check that new Claude Code sessions make clawds appear. Hooks are read at session start, so existing sessions need a restart. Confirm the hook command actually runs under Claude Code on Windows (shell and path quoting). (2) Then milestone 4: state machine and animations (idle, working, needs-you, done, each with a transition).
+**Next up:** (1) confirm on screen that milestone 3 hooks create clawds in a real new Claude Code session, and that milestone 4 animations look right (restart the app first: `taskkill //F //IM electron.exe`, then `npm start`). (2) Known design gaps: a `Notification` after `Stop` (Claude's idle prompt) flips a done clawd to needs-you; "done stays until you click it" needs click handling, which needs the window to stop being fully click-through (milestone 5/6). (3) Milestone 5: layout, hover tooltip, per-session tint.
 
 ## Decision
 

@@ -1,7 +1,71 @@
 html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
 #strip { position: relative; width: 100%; height: 100%; }
-.clawd { position: absolute; bottom: 0; transition: left 0.2s ease-out; }
-/* Placeholder state cues until milestone 4 adds real animations. */
-.clawd[data-state="working"]   { filter: brightness(1.15); }
-.clawd[data-state="needs-you"] { filter: hue-rotate(-30deg) saturate(1.6); }
-.clawd[data-state="done"]      { filter: hue-rotate(80deg); }
+
+.clawd {
+  position: absolute;
+  bottom: 0;
+  width: 48px;
+  height: 36px;
+  transform-origin: 50% 100%;
+  transition: left 0.2s ease-out;
+}
+.sprite { display: block; }
+
+/* All motion is stepped (steps(1)) so it reads as pixel-art frames, not smooth tweening.
+   Keyframes come in held pairs: "0%,49% {A} 50%,100% {B}" = two frames per loop. */
+.sprite, .arm, .leg, .eyes, .bubble { animation-timing-function: steps(1, end); }
+.eyes { transform-box: fill-box; transform-origin: 50% 100%; }
+.bubble { opacity: 0; }
+
+/* ---------- keyframes ---------- */
+@keyframes bob-slow { 0%,49% { transform: translateY(0); }     50%,100% { transform: translateY(-1px); } }
+@keyframes bob-fast { 0%,49% { transform: translateY(0); }     50%,100% { transform: translateY(-2px); } }
+@keyframes hop      { 0%,49% { transform: translateY(0); }     50%,100% { transform: translateY(-4px); } }
+@keyframes jump {
+  0%,19%  { transform: translateY(0); }
+  20%,39% { transform: translateY(-4px); }
+  40%,59% { transform: translateY(-8px); }
+  60%,79% { transform: translateY(-4px); }
+  80%,100% { transform: translateY(0); }
+}
+@keyframes blink     { 0%,92% { transform: scaleY(1); } 93%,100% { transform: scaleY(0.2); } }
+@keyframes eyes-rest { 0%,99% { transform: scaleY(1); } 100% { transform: scaleY(0.3); } }
+@keyframes arm-up    { 0%,99% { transform: translateY(-3px); } 100% { transform: translateY(0); } }
+@keyframes type-a    { 0%,49% { transform: translateY(0); }    50%,100% { transform: translateY(-1px); } }
+@keyframes type-b    { 0%,49% { transform: translateY(-1px); } 50%,100% { transform: translateY(0); } }
+@keyframes wave      { 0%,49% { transform: translateY(-2px); } 50%,100% { transform: translateY(-1px); } }
+@keyframes flash     { 0%,49% { opacity: 1; }                  50%,100% { opacity: 0.25; } }
+@keyframes show-late { 0%,99% { opacity: 0; }                  100% { opacity: 1; } }
+@keyframes pop       { from { transform: scale(0); } to { transform: scale(1); } }
+@keyframes walk-off  { to { transform: translateX(160px); opacity: 0; } }
+
+/* ---------- idle: breathing + occasional blink ---------- */
+.clawd[data-state="idle"] .sprite { animation: bob-slow 2.4s infinite; }
+.clawd[data-state="idle"] .eyes   { animation: blink 4s infinite; }
+
+/* ---------- working: fast bounce, typing arms, shuffling feet ---------- */
+.clawd[data-state="working"] .sprite { animation: bob-fast 0.3s infinite; }
+.clawd[data-state="working"] .arm-l  { animation: type-a 0.3s infinite; }
+.clawd[data-state="working"] .arm-r  { animation: type-b 0.3s infinite; }
+
+/* ---------- needs-you: hopping, waving, flashing "!" ---------- */
+.clawd[data-state="needs-you"] .sprite       { animation: hop 0.7s infinite; }
+.clawd[data-state="needs-you"] .arm-r        { animation: wave 0.35s infinite; }
+.clawd[data-state="needs-you"] .bubble-alert { opacity: 1; animation: flash 0.7s infinite; }
+
+/* ---------- done: celebrate 3 jumps (1.5s), then rest with a check mark ---------- */
+.clawd[data-state="done"] .sprite      { animation: jump 0.5s 3; }
+.clawd[data-state="done"] .arm         { animation: arm-up 1.5s 1; }
+.clawd[data-state="done"] .eyes        { animation: eyes-rest 1.5s 1 forwards; }
+.clawd[data-state="done"] .bubble-done { animation: show-late 1.5s 1 forwards; }
+
+/* ---------- walking feet (working + leaving) ---------- */
+.clawd[data-state="working"] .leg-l, .clawd.leaving .leg-l { animation: type-a 0.3s infinite; }
+.clawd[data-state="working"] .leg-r, .clawd.leaving .leg-r { animation: type-b 0.3s infinite; }
+
+/* ---------- appear / leave (put last so they win over state rules) ---------- */
+.clawd.appear  { animation: pop 0.4s steps(4, end); }
+.clawd.leaving { animation: walk-off 1.2s steps(12, end) forwards; }
+.clawd.leaving .sprite { animation: bob-fast 0.3s infinite; }
+.clawd.leaving .arm, .clawd.leaving .eyes, .clawd.leaving .bubble { animation: none; }
+.clawd.leaving .bubble { opacity: 0; }
