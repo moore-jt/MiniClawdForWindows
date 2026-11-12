@@ -65,6 +65,37 @@ A tiny hook script POSTs `{session_id, event, cwd, pid}` to `localhost:<port>`, 
    - Launch at login.
 8. **Stretch goals:** sounds, and subagent mini-clawds. (Click-to-focus moved to milestone 5c.)
 
+## Possible Improvements
+
+Candidate work beyond the milestones above, roughly in priority order. Nothing here is committed to yet.
+
+**Tier 1: make it usable every day**
+- **Tray icon with Quit** (overlaps milestone 6). Today the only ways to quit are Ctrl+C or `taskkill`, which leaves orphan Electron processes. Menu: Quit, Mute, Clear done, Move clawds, Reset position.
+- **Clean up stale sessions** (overlaps milestone 7). `SessionStore` only removes a session on `SessionEnd`, so a killed terminal or crashed Claude leaves its clawd forever. Garbage-collect sessions whose `claude.exe` pid is dead (reuse the `~/.claude/sessions/<pid>.json` lookup from `windowFocus.ts`), with a long idle timeout as a fallback.
+- **Fix state-machine gaps.**
+  - A `Notification` after `Stop` (Claude's idle reminder) flips a done clawd to needs-you. Filter on the payload's message or notification type so only real permission or input prompts count.
+  - Unconfirmed: a clawd may stay on "working" if the user interrupts Claude with Esc, because `Stop` may not fire. Test first; if true, add `PreToolUse`/`PostToolUse` hooks or a working timeout to recover.
+- **Launch at login** via `app.setLoginItemSettings`, toggled from the tray.
+- **Finish the open on-screen checks:** hover tooltip, click-through behavior, and the click-to-focus speedup.
+
+**Tier 2: planned features**
+- **Movable strip** (milestone 5b).
+- **Native extras** (milestone 6): taskbar flash and overlay badge on done; hide the strip or fall back to the badge under fullscreen apps.
+- **Multi-monitor, mixed-DPI and auto-hide taskbar handling** (milestone 7), which needs real-hardware testing.
+
+**Tier 3: polish and distribution**
+- **Packaging.** `electron-builder` installer or portable `.exe` that registers the hooks itself, so users skip clone, `npm install`, `hooks:install` and `npm start`. Publish as a GitHub release.
+- **Resilient hook install.** The hook command stores an absolute path and breaks if the repo moves. Copy `clawd-hook.js` to a stable location (e.g. `%APPDATA%`) and point `settings.json` there.
+- **Port conflicts.** The port is fixed at 47821 and the app only logs an error if it's taken. Make it configurable (and written into the hook) or add a fallback.
+- **Sounds** (mutable) and **subagent mini-clawds** via `SubagentStop`.
+- **Guard against format drift.** `~/.claude/sessions/<pid>.json` is undocumented; fall back gracefully and log when parsing fails.
+
+**Engineering hygiene**
+- Unit tests for `SessionStore` transitions and the installer's merge/uninstall logic (only `test:bus` exists today).
+- GitHub Actions running `typecheck`, build and tests.
+- Trim the long Status section of this file into a short roadmap and move finished-milestone notes into a changelog or docs.
+- Update the README "Status" line once the tray icon exists.
+
 ## Risks
 
 - **Taskbar position:** Win11 only officially supports the bottom, so start there. Auto-hide changes where the strip should sit.
