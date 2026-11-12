@@ -33,9 +33,17 @@ A tiny hook script POSTs `{session_id, event, cwd, pid}` to `localhost:<port>`, 
 
 1. **Skeleton (done, pending visual check):** an overlay window pinned just above the taskbar using `screen.getPrimaryDisplay()` bounds minus `workArea`, with one static clawd.
 2. **Event bus (done):** a localhost HTTP listener, and a curl test that adds and removes clawds.
-3. **Hook script and installer (code done, not yet installed into the real settings):** a command that merges the hooks into `~/.claude/settings.json`, with an uninstall option.
+3. **Hook script and installer (done and installed into `~/.claude/settings.json`; live check in a real session still pending):** a command that merges the hooks into `~/.claude/settings.json`, with an uninstall option.
 4. **State machine and animations (code done, awaiting on-screen check):** idle, working, needs-you, done, each with a transition.
 5. **Layout:** clawds spaced along the strip, a hover tooltip with the project folder name (from `cwd`), and a tint or hat per project so agents are distinguishable.
+5b. **Movable clawds (planned, depends on 5's hover hit-testing):** let the user reposition the clawd strip instead of it being locked above the taskbar.
+   - **Click-through hit-testing (shared with the tooltip and click-to-dismiss):** the window stays click-through with `setIgnoreMouseEvents(true, {forward: true})`. The renderer gets forwarded `mousemove` events, and when the pointer is over a clawd it tells main (IPC) to switch to `setIgnoreMouseEvents(false)`, then back to click-through when it leaves. Everything outside the clawds keeps passing clicks to the apps underneath.
+   - **Window shrinks to fit:** today the window spans the full work-area width, so moving it sideways is meaningless. Change it to hug the clawds (width = N clawds x slot + padding, resized with `setBounds` as sessions come and go), anchored at a saved left/bottom position.
+   - **Edit mode, not always-draggable:** a tray item "Move clawds" (milestone 6) toggles edit mode. While on, the strip shows a dashed outline and can be dragged anywhere with pointer events (the renderer sends drag deltas, main calls `setBounds`, clamped to the display's `workArea`). Leaving edit mode locks it, so a normal click can't move it by accident. A "Reset position" tray item returns it to above-the-taskbar-left.
+   - **Persistence:** `settings.json` in Electron's `userData`: `{displayId, offsetX, offsetBottom}`, stored relative to the display's `workArea`, so it survives resolution, DPI and taskbar changes. Optional snap to the taskbar edge and screen edges within ~12px.
+   - **Robustness:** if the saved display is unplugged, fall back to the primary display's default spot. Re-clamp on `display-metrics-changed`. Mixed-DPI multi-monitor `setBounds` rounding needs testing.
+   - **Later:** drag a single clawd out of the strip, or a vertical layout.
+   - **Decided:** the whole strip moves together (not each clawd independently).
 6. **Native extras:** taskbar flash and overlay badge on done, plus a tray icon with quit, mute and "clear done".
 7. **Robustness:**
    - Sessions with a dead PID or no events for N minutes are garbage-collected.
