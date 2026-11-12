@@ -3,7 +3,7 @@ import * as path from 'path';
 import { SessionStore } from './sessions';
 import { startEventBus } from './eventBus';
 
-const STRIP_HEIGHT = 48;
+const STRIP_HEIGHT = 72; // 36px clawd + room above it for the hover tooltip
 
 let strip: BrowserWindow | null = null;
 
@@ -13,6 +13,12 @@ const store = new SessionStore((change) => {
 
 // Renderer asks for the current sessions once its listeners are attached.
 ipcMain.on('renderer:ready', (e) => e.sender.send('sessions:init', store.list()));
+
+// Hit-testing: the window is click-through everywhere except while the pointer is over a clawd.
+// Forwarded mouse-moves still reach the renderer while ignoring, so it can tell us when to switch.
+ipcMain.on('strip:hover', (_e, over: boolean) => {
+  strip?.setIgnoreMouseEvents(!over, { forward: true });
+});
 
 /** Rectangle for the strip: full width of the work area, sitting just above the taskbar. */
 function stripBounds() {

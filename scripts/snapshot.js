@@ -17,7 +17,7 @@ const session = (id, state, cwd) => ({ id, state, cwd, pid: null, lastSeen: 0 })
 
 app.whenReady().then(async () => {
   const win = new BrowserWindow({
-    width: 380 * ZOOM, height: 50 * ZOOM, show: false, backgroundColor: '#e8e8e8',
+    width: 380 * ZOOM, height: 74 * ZOOM, show: false, backgroundColor: '#e8e8e8',
     webPreferences: { preload: path.join(__dirname, '..', 'dist', 'preload.js'), contextIsolation: true },
   });
   win.webContents.setZoomFactor(ZOOM);
