@@ -106,13 +106,14 @@ Candidate work beyond the milestones above, roughly in priority order. Nothing h
 
 **Milestones 1-4: done and verified.** The user confirmed on screen that the clawd strip sits at the bottom left just above the taskbar, that the milestone 4 animations look right, and that a real new Claude Code session makes a clawd appear (so the hooks installed in `~/.claude/settings.json` work end to end on Windows). The event bus was also verified over HTTP (`/health` 200, valid events 204, bad events/bodies 400). Not explicitly confirmed: that clicks pass through the strip to apps underneath.
 
-Current state: the app and hooks work end to end, but it is still a bare strip: no tooltip, tint per session, tray icon, quit option, movable position or launch-at-login. The next work is milestones 5, 5b and 6.
+Current state (updated 2026-11-16): the app and hooks work end to end. Milestones 1-5c are built: animations, per-session colors, hover tooltip, click-through hit-testing and click-to-focus the terminal (5c verified on screen by the user). Still missing: tray icon, Quit option, stale-session cleanup, movable strip (5b) and launch-at-login. Next work is the Tier 1 items under "Possible Improvements" (tray with Quit, stale-session GC, state-machine gaps, launch at login), then 5b and 6.
 
 What exists:
 - `src/main.ts`: transparent, frameless, always-on-top, click-through, non-focusable window. 48px tall, full width of the primary display's `workArea`, bottom-aligned (just above the taskbar). Re-pins on `display-metrics-changed`, `display-added`, `display-removed`. Wires the session store, event bus and IPC together.
 - `src/eventBus.ts`: HTTP listener on `127.0.0.1:47821` (localhost only). `POST /event` with `{session_id, event, cwd?, pid?}` returns 204; `GET /health` returns 200; 400 for bad input or unknown events; 64KB body cap.
 - `src/sessions.ts`: `SessionStore` (`Map<session_id, Session>`). Maps `SessionStart`->idle, `UserPromptSubmit`->working, `Notification`->needs-you, `Stop`->done, `SessionEnd`->remove. Emits upsert/remove changes.
-- `src/preload.ts`: exposes `window.clawd` (`onSessions`, `onChange`, `ready`) via `contextBridge`.
+- `src/preload.ts`: exposes `window.clawd` (`onSessions`, `onChange`, `ready`, plus the hover and `session:focus` IPC added in milestones 5 and 5c) via `contextBridge`.
+- `src/windowFocus.ts`: finds a session's terminal window and raises it, using a persistent hidden PowerShell and Claude Code's `~/.claude/sessions/<pid>.json` (see milestone 5c).
 - `src/renderer/`: `index.html` (clawd SVG in a `<template>`), `renderer.ts` (adds/updates/removes clawds, 56px spacing, tooltip text in `data-tip` = last folder of `cwd`), `style.css` (per-state animations, see below).
 - `scripts/copy-static.js`: copies non-TS renderer files into `dist/` after `tsc`.
 - `hooks/clawd-hook.js`: the Claude Code hook. Reads the hook JSON on stdin, POSTs `{session_id, event: hook_event_name, cwd, pid: process.ppid}` to the bus. Prints nothing, always exits 0, 400ms timeout plus a hard 600ms stop. Measured ~113ms total with the app off (mostly Node startup).
@@ -133,11 +134,12 @@ Gotchas:
 
 - The event bus port is fixed at 47821 (`CLAWD_PORT` env var is honored by the test script only). If the port is taken the bus logs an error and the app keeps running without it.
 
-**Milestone 5 built, awaiting on-screen check:** click-through hit-testing (renderer reports pointer-over-clawd via IPC `strip:hover`, main toggles `setIgnoreMouseEvents`), hover tooltip (`folder · state`), and a per-session body color (palette in `renderer.ts`, lowest free slot per session, set via CSS var `--tint`). The strip window is now 72px tall to leave room for the tooltip. Verified by typecheck and snapshot only; hover and click-through still need a real check. Next: 5b (movable strip, whole strip moves together: decided), then 6 (tray with quit/mute/clear-done/"Move clawds", taskbar flash/badge).
+**Milestone 5 built:** click-through hit-testing (renderer reports pointer-over-clawd via IPC `strip:hover`, main toggles `setIgnoreMouseEvents`), hover tooltip (`folder · state`, later `· click to open`), and a per-session body color (palette in `renderer.ts`, lowest free slot per session, set via CSS var `--tint`). The strip window is 72px tall to leave room for the tooltip. Hit-testing is implicitly confirmed because the user verified click-to-focus (5c) on screen; the tooltip's look and click-through over other apps were never explicitly confirmed. Next: Tier 1 improvements, then 5b (movable strip, whole strip moves together: decided), then 6 (tray with quit/mute/clear-done/"Move clawds", taskbar flash/badge).
 
 Known design gaps to decide along the way:
 - A `Notification` after `Stop` (Claude's idle prompt) flips a done clawd to needs-you.
-- "Done stays until you click it" needs the same click handling as the tooltip, since the strip is fully click-through today. Until then, done stays until the next event.
+- Decided in 5c: a click only focuses the terminal; it does not dismiss a done clawd. Done stays until the next event (or `SessionEnd`).
+- `~/.claude/sessions/<pid>.json` is undocumented, so click-to-focus could break on a Claude Code update (see "Guard against format drift").
 - Stopping a backgrounded `npm start` can leave orphan Electron processes; a tray "Quit" (milestone 6) would fix the need for `taskkill`.
 
 ## Decision
