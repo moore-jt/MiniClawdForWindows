@@ -37,6 +37,9 @@ process.stdin.on('end', () => {
     cwd: typeof d.cwd === 'string' ? d.cwd : '',
     // The hook's parent is the shell/Claude process that launched us.
     pid: process.ppid,
+    // Only Notification events carry these; the app uses them to ignore idle reminders.
+    notification_type: typeof d.notification_type === 'string' ? d.notification_type : undefined,
+    message: typeof d.message === 'string' ? d.message.slice(0, 200) : undefined,
   });
   const req = http.request(
     {

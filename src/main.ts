@@ -1,7 +1,8 @@
-import { app, BrowserWindow, ipcMain, screen } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, screen, Tray } from 'electron';
 import * as path from 'path';
 import { SessionStore } from './sessions';
 import { startEventBus } from './eventBus';
+import { startSessionGc } from './gc';
 import { focusSessionWindow, forgetSessionWindow, warmUpFocusHelper, stopFocusHelper, prefetchSessionWindow } from './windowFocus';
 
 const STRIP_HEIGHT = 72; // 36px clawd + room above it for the hover tooltip
@@ -68,6 +69,44 @@ function reposition() {
   strip?.setBounds(stripBounds());
 }
 
+// Kept in a module variable so the tray isn't garbage-collected (it would vanish).
+let tray: Tray | null = null;
+
+/** Dev runs are `electron <app path>`, so the login item must pass the app path too. */
+function loginItemArgs() {
+  return app.isPackaged ? {} : { path: process.execPath, args: [app.getAppPath()] };
+}
+
+function launchesAtLogin(): boolean {
+  return app.getLoginItemSettings(loginItemArgs()).openAtLogin;
+}
+
+function createTray() {
+  const icon = nativeImage.createFromPath(path.join(__dirname, '..', 'assets', 'tray.png'));
+  tray = new Tray(icon);
+  tray.setToolTip('Mini Clawd');
+  const buildMenu = () =>
+    Menu.buildFromTemplate([
+      { label: 'Mini Clawd', enabled: false },
+      { type: 'separator' },
+      {
+        label: 'Clear done',
+        click: () => store.removeWhere((s) => s.state === 'done'),
+      },
+      {
+        label: 'Launch at login',
+        type: 'checkbox',
+        checked: launchesAtLogin(),
+        click: (item) => app.setLoginItemSettings({ openAtLogin: item.checked, ...loginItemArgs() }),
+      },
+      { type: 'separator' },
+      { label: 'Quit', click: () => app.quit() },
+    ]);
+  // Rebuild on each open so the checkbox reflects the real login-item state.
+  tray.on('right-click', () => tray?.popUpContextMenu(buildMenu()));
+  tray.on('click', () => tray?.popUpContextMenu(buildMenu()));
+}
+
 // Only one strip at a time: a second launch would fight over the port and cache.
 if (!app.requestSingleInstanceLock()) {
   console.error('[clawd] already running; exiting this copy');
@@ -79,6 +118,8 @@ app.whenReady().then(() => {
   createStrip();
   warmUpFocusHelper();
   startEventBus(store);
+  startSessionGc(store);
+  createTray();
   // Re-pin when the taskbar, resolution or DPI changes.
   screen.on('display-metrics-changed', reposition);
   screen.on('display-added', reposition);

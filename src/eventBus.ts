@@ -41,7 +41,11 @@ export function startEventBus(store: SessionStore, port = DEFAULT_PORT): http.Se
         }
         const cwd = typeof d.cwd === 'string' ? d.cwd : '';
         const pid = Number.isInteger(d.pid) ? d.pid : null;
-        res.writeHead(store.apply(d.session_id, d.event, cwd, pid) ? 204 : 400).end();
+        const detail = {
+          notificationType: typeof d.notification_type === 'string' ? d.notification_type : undefined,
+          message: typeof d.message === 'string' ? d.message : undefined,
+        };
+        res.writeHead(store.apply(d.session_id, d.event, cwd, pid, detail) ? 204 : 400).end();
       } catch {
         res.writeHead(400).end();
       }

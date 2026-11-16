@@ -1,26 +1,6 @@
 import { spawn, ChildProcess } from 'child_process';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
+import { claudePidFor } from './claudeSessions';
 
-/**
- * Claude Code keeps ~/.claude/sessions/<pid>.json for each live session ({pid, sessionId, ...}).
- * That gives us the long-lived claude process for a session with zero cost to Claude itself.
- * Internal, undocumented format: returns null if anything is off, and callers fall back.
- */
-function claudePidFor(sessionId: string): number | null {
-  try {
-    const dir = path.join(os.homedir(), '.claude', 'sessions');
-    for (const f of fs.readdirSync(dir)) {
-      if (!f.endsWith('.json')) continue;
-      try {
-        const j = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
-        if (j.sessionId === sessionId && Number.isInteger(j.pid)) return j.pid;
-      } catch { /* unreadable or half-written file: skip */ }
-    }
-  } catch { /* no sessions dir */ }
-  return null;
-}
 
 // Cache of session id -> terminal window handle, so repeat clicks skip the process-tree walk.
 const hwndCache = new Map<string, number>();
