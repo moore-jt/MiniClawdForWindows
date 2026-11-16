@@ -57,7 +57,7 @@ node scripts/test-bus.js clear
 
 ## Status
 
-Early days. There's a tray icon (Clear done, Launch at login, Quit) and clawds whose Claude process died are cleaned up automatically. Still on the to-do list: a movable strip and a packaged installer. See [PLAN.md](PLAN.md) for the roadmap.
+Early days. There's a tray icon (Clear done, Launch at login, Quit) and clawds whose Claude process died are cleaned up automatically. Still on the to-do list: a packaged installer. See [PLAN.md](PLAN.md) for the roadmap.
 
 ## License
 

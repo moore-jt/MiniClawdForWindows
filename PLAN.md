@@ -36,20 +36,12 @@ A tiny hook script POSTs `{session_id, event, cwd, pid}` to `localhost:<port>`, 
 3. **Hook script and installer (done, installed into `~/.claude/settings.json` and verified in a real session):** a command that merges the hooks into `~/.claude/settings.json`, with an uninstall option.
 4. **State machine and animations (done, verified on screen):** idle, working, needs-you, done, each with a transition.
 5. **Layout (built; hover untested by user):** clawds spaced along the strip, a hover tooltip with the project folder name (from `cwd`), and a tint or hat per project so agents are distinguishable.
-5b. **Movable clawds (planned, depends on 5's hover hit-testing):** let the user reposition the clawd strip instead of it being locked above the taskbar.
-   - **Click-through hit-testing (shared with the tooltip and click-to-dismiss):** the window stays click-through with `setIgnoreMouseEvents(true, {forward: true})`. The renderer gets forwarded `mousemove` events, and when the pointer is over a clawd it tells main (IPC) to switch to `setIgnoreMouseEvents(false)`, then back to click-through when it leaves. Everything outside the clawds keeps passing clicks to the apps underneath.
-   - **Window shrinks to fit:** today the window spans the full work-area width, so moving it sideways is meaningless. Change it to hug the clawds (width = N clawds x slot + padding, resized with `setBounds` as sessions come and go), anchored at a saved left/bottom position.
-   - **Edit mode, not always-draggable:** a tray item "Move clawds" (milestone 6) toggles edit mode. While on, the strip shows a dashed outline and can be dragged anywhere with pointer events (the renderer sends drag deltas, main calls `setBounds`, clamped to the display's `workArea`). Leaving edit mode locks it, so a normal click can't move it by accident. A "Reset position" tray item returns it to above-the-taskbar-left.
-   - **Persistence:** `settings.json` in Electron's `userData`: `{displayId, offsetX, offsetBottom}`, stored relative to the display's `workArea`, so it survives resolution, DPI and taskbar changes. Optional snap to the taskbar edge and screen edges within ~12px.
-   - **Robustness:** if the saved display is unplugged, fall back to the primary display's default spot. Re-clamp on `display-metrics-changed`. Mixed-DPI multi-monitor `setBounds` rounding needs testing.
-   - **Later:** drag a single clawd out of the strip, or a vertical layout.
-   - **Decided:** the whole strip moves together (not each clawd independently).
 5c. **Click a clawd to focus its terminal (done, verified on screen by the user; depends on 5's hit-testing):** Built in `src/windowFocus.ts` (one-shot PowerShell: walk parent chain, restore, Alt-tap, `SetForegroundWindow`; hwnd cached per session), `session:focus` IPC, click handler and shake in the renderer, and "click to open" in the tooltip. Spike script: `node scripts/window-chain.js [pid]`.
    - **Key finding:** the hook's `pid` (`process.ppid`) is a short-lived shell that is dead by click time, so walking up from it fails. Instead `windowFocus.ts` reads Claude Code's own `~/.claude/sessions/<pid>.json` (`{pid, sessionId, cwd, ...}`) to find the live `claude.exe` for the session id, and walks up from that (claude.exe -> powershell -> WindowsTerminal). Zero cost to Claude, no hook change. The hook pid is only a fallback. Risk: that file is an internal, undocumented format and could change in a future Claude Code version.
    - **Speed:** the one-shot PowerShell took 1-1.5s per click (mostly startup and `Add-Type` compile). Replaced by one persistent hidden PowerShell (started at app launch, line protocol over stdin/stdout, restarted automatically if it dies or hangs) and a prefetch that resolves each session's terminal window when its clawd first appears. Headless timings: ~730ms for an unprefetched first walk, 2-7ms once the window handle is cached, ~6ms for a first click after prefetch. Awaiting the user's on-screen check of the speedup.
    - Original plan notes follow. clicking a clawd brings that session's terminal window to the front. This is the "click a clawd to focus its terminal" stretch goal from milestone 8, pulled forward.
    - **Decided:** a click only focuses. It does not dismiss a done clawd (done stays until the next event). Window lookup uses a one-shot hidden PowerShell with `Add-Type` P/Invoke for v1; `koffi` is a possible later swap if ~300-500ms feels slow.
-   - **Click wiring:** `click` handler on `.clawd:not(.leaving)` in `renderer.ts` calls a new `clawd.focus(sessionId)` (add to `preload.ts`); `main.ts` handles `ipcMain.on('session:focus')`. Add `cursor: pointer`. Ignore the click if it ended a drag (compatible with 5b's edit mode).
+   - **Click wiring:** `click` handler on `.clawd:not(.leaving)` in `renderer.ts` calls a new `clawd.focus(sessionId)` (add to `preload.ts`); `main.ts` handles `ipcMain.on('session:focus')`. Add `cursor: pointer`.
    - **Finding the window (new `src/windowFocus.ts`):** the hook's `pid` is `process.ppid`, which may be an intermediate shell (`cmd`/`bash`), not the terminal. Walk up the parent-process chain (CIM `Win32_Process` `ParentProcessId`) to the first ancestor with a visible top-level window (`MainWindowHandle != 0`): `WindowsTerminal.exe`, `Code.exe`, `conhost`, etc.
    - **Bringing it forward:** `ShowWindow(SW_RESTORE)` if minimized, then `SetForegroundWindow`. A click on our own overlay counts as user input, which normally grants the right; fallback is the `keybd_event` Alt-tap or `AttachThreadInput` trick. The overlay is `focusable: false`, so it never steals focus itself.
    - **Caching:** resolve the handle lazily on first click, store it on the session, re-resolve if it is no longer valid (terminal closed and reopened).
@@ -70,7 +62,7 @@ A tiny hook script POSTs `{session_id, event, cwd, pid}` to `localhost:<port>`, 
 Candidate work beyond the milestones above, roughly in priority order. Nothing here is committed to yet.
 
 **Tier 1: make it usable every day**
-- **Tray icon with Quit** (overlaps milestone 6). Today the only ways to quit are Ctrl+C or `taskkill`, which leaves orphan Electron processes. Menu: Quit, Mute, Clear done, Move clawds, Reset position.
+- **Tray icon with Quit** (overlaps milestone 6). Today the only ways to quit are Ctrl+C or `taskkill`, which leaves orphan Electron processes. Menu: Quit, Mute, Clear done.
 - **Clean up stale sessions** (overlaps milestone 7). `SessionStore` only removes a session on `SessionEnd`, so a killed terminal or crashed Claude leaves its clawd forever. Garbage-collect sessions whose `claude.exe` pid is dead (reuse the `~/.claude/sessions/<pid>.json` lookup from `windowFocus.ts`), with a long idle timeout as a fallback.
 - **Fix state-machine gaps.**
   - A `Notification` after `Stop` (Claude's idle reminder) flips a done clawd to needs-you. Filter on the payload's message or notification type so only real permission or input prompts count.
@@ -79,7 +71,6 @@ Candidate work beyond the milestones above, roughly in priority order. Nothing h
 - **Finish the open on-screen checks:** hover tooltip, click-through behavior, and the click-to-focus speedup.
 
 **Tier 2: planned features**
-- **Movable strip** (milestone 5b).
 - **Native extras** (milestone 6): taskbar flash and overlay badge on done; hide the strip or fall back to the badge under fullscreen apps.
 - **Multi-monitor, mixed-DPI and auto-hide taskbar handling** (milestone 7), which needs real-hardware testing.
 
@@ -106,7 +97,7 @@ Candidate work beyond the milestones above, roughly in priority order. Nothing h
 
 **Milestones 1-4: done and verified.** The user confirmed on screen that the clawd strip sits at the bottom left just above the taskbar, that the milestone 4 animations look right, and that a real new Claude Code session makes a clawd appear (so the hooks installed in `~/.claude/settings.json` work end to end on Windows). The event bus was also verified over HTTP (`/health` 200, valid events 204, bad events/bodies 400). Not explicitly confirmed: that clicks pass through the strip to apps underneath.
 
-Current state (updated 2026-11-16): the app and hooks work end to end. Milestones 1-5c are built: animations, per-session colors, hover tooltip, click-through hit-testing and click-to-focus the terminal (5c verified on screen by the user). Tier 1 improvements are built (tray with Clear done / Launch at login / Quit, stale-session GC, Notification filtering, working-timeout recovery) and need the on-screen checks listed below. Still missing: movable strip (5b), tray Mute / Move clawds, taskbar flash and badge (6), multi-monitor and DPI handling (7). Next: 5b, then 6.
+Current state (updated 2026-11-16): the app and hooks work end to end. Milestones 1-5c are built: animations, per-session colors, hover tooltip, click-through hit-testing and click-to-focus the terminal (5c verified on screen by the user). Tier 1 improvements are built (tray with Clear done / Launch at login / Quit, stale-session GC, Notification filtering, working-timeout recovery) and need the on-screen checks listed below. Still missing: tray Mute, taskbar flash and badge (6), multi-monitor and DPI handling (7). Next: 6. (The movable strip, formerly 5b, was dropped from the plan.)
 
 What exists:
 - `src/main.ts`: transparent, frameless, always-on-top, click-through, non-focusable window. 48px tall, full width of the primary display's `workArea`, bottom-aligned (just above the taskbar). Re-pins on `display-metrics-changed`, `display-added`, `display-removed`. Wires the session store, event bus and IPC together.
@@ -141,7 +132,7 @@ Gotchas:
 
 - The event bus port is fixed at 47821 (`CLAWD_PORT` env var is honored by the test script only). If the port is taken the bus logs an error and the app keeps running without it.
 
-**Milestone 5 built:** click-through hit-testing (renderer reports pointer-over-clawd via IPC `strip:hover`, main toggles `setIgnoreMouseEvents`), hover tooltip (`folder · state`, later `· click to open`), and a per-session body color (palette in `renderer.ts`, lowest free slot per session, set via CSS var `--tint`). The strip window is 72px tall to leave room for the tooltip. Hit-testing is implicitly confirmed because the user verified click-to-focus (5c) on screen; the tooltip's look and click-through over other apps were never explicitly confirmed. Next: Tier 1 improvements, then 5b (movable strip, whole strip moves together: decided), then 6 (tray with quit/mute/clear-done/"Move clawds", taskbar flash/badge).
+**Milestone 5 built:** click-through hit-testing (renderer reports pointer-over-clawd via IPC `strip:hover`, main toggles `setIgnoreMouseEvents`), hover tooltip (`folder · state`, later `· click to open`), and a per-session body color (palette in `renderer.ts`, lowest free slot per session, set via CSS var `--tint`). The strip window is 72px tall to leave room for the tooltip. Hit-testing is implicitly confirmed because the user verified click-to-focus (5c) on screen; the tooltip's look and click-through over other apps were never explicitly confirmed. Next: Tier 1 improvements, then 6 (tray mute, taskbar flash/badge). The movable strip (5b) was dropped.
 
 Known design gaps to decide along the way:
 - A `Notification` after `Stop` (Claude's idle prompt) flips a done clawd to needs-you.
