@@ -22,9 +22,20 @@ const store = new SessionStore((change) => {
 });
 const dashboard: Dashboard | null = new Dashboard(store);
 
-// Right-click on a clawd (or tray "Dashboard...") opens the dashboard window.
-ipcMain.on('dashboard:open', (_e, id: unknown) => dashboard?.open(typeof id === 'string' ? id : undefined));
+// Right-click on a clawd (or tray "Dashboard...") opens the dashboard bubble. The renderer sends
+// the clawd's rectangle in strip coordinates; the strip's own position turns that into screen pixels.
+ipcMain.on('dashboard:open', (_e, id: unknown, rect: unknown) => {
+  const r = rect as { x?: unknown; top?: unknown } | undefined;
+  const b = strip?.getBounds();
+  const anchor =
+    b && typeof r?.x === 'number' && typeof r?.top === 'number'
+      ? { x: b.x + r.x, top: b.y + r.top }
+      : undefined;
+  dashboard?.open(typeof id === 'string' ? id : undefined, anchor);
+});
 ipcMain.handle('dashboard:get', () => dashboard?.snapshot());
+ipcMain.on('dashboard:fit', (_e, h: unknown) => typeof h === 'number' && dashboard?.fit(h));
+ipcMain.on('dashboard:close', () => dashboard?.close());
 
 // Renderer asks for the current sessions once its listeners are attached.
 ipcMain.on('renderer:ready', (e) => e.sender.send('sessions:init', store.list()));

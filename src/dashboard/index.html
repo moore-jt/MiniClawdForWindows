@@ -7,38 +7,31 @@
   <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
-  <header>
-    <select id="picker" aria-label="Session"></select>
-    <span id="state" class="pill"></span>
-  </header>
-  <nav>
-    <button class="tab active" data-tab="overview">Overview</button>
-    <!-- Usage, Skills and plugins, and Settings tabs come in later passes. -->
-  </nav>
-  <main id="overview">
-    <p id="empty" hidden>No Claude Code sessions yet. Start one and it will appear here.</p>
+  <div id="bubble">
+    <p id="empty" hidden>That session has ended.</p>
     <section id="content" hidden>
+      <header>
+        <div id="name">n/a</div>
+        <span id="state" class="pill"></span>
+      </header>
       <div class="grid">
-        <div class="card"><h2>Model</h2><div class="big" id="model">n/a</div></div>
-        <div class="card"><h2>Turns</h2><div class="big" id="turns">n/a</div></div>
-        <div class="card"><h2>Uptime</h2><div class="big" id="uptime">n/a</div></div>
+        <div><h2>Model</h2><div class="big" id="model">n/a</div></div>
+        <div><h2>Turns</h2><div class="big" id="turns">n/a</div></div>
+        <div><h2>Uptime</h2><div class="big" id="uptime">n/a</div></div>
       </div>
-      <div class="card">
-        <h2>Context window <span id="ctx-label"></span></h2>
-        <div class="meter"><div id="ctx-bar"></div></div>
-      </div>
-      <div class="card">
-        <h2>Tokens (this session)</h2>
-        <table>
-          <tr><td>Input</td><td id="t-input">n/a</td></tr>
-          <tr><td>Output</td><td id="t-output">n/a</td></tr>
-          <tr><td>Cache read</td><td id="t-cread">n/a</td></tr>
-          <tr><td>Cache write</td><td id="t-cwrite">n/a</td></tr>
-        </table>
-      </div>
+      <h2>Context <span id="ctx-label"></span></h2>
+      <div class="meter"><div id="ctx-bar"></div></div>
+      <h2>Tokens</h2>
+      <table>
+        <tr><td>Input</td><td id="t-input">n/a</td></tr>
+        <tr><td>Output</td><td id="t-output">n/a</td></tr>
+        <tr><td>Cache read</td><td id="t-cread">n/a</td></tr>
+        <tr><td>Cache write</td><td id="t-cwrite">n/a</td></tr>
+      </table>
       <p class="muted" id="cwd"></p>
     </section>
-  </main>
+    <div id="tail"></div>
+  </div>
   <script src="dashboard.js"></script>
 </body>
 </html>

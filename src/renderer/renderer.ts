@@ -6,7 +6,7 @@ declare const clawd: {
   onChange(cb: (c: Change) => void): void;
   hover(over: boolean): void;
   focus(id: string): Promise<boolean>;
-  openDashboard(id: string): void;
+  openDashboard(id: string, rect: { x: number; top: number }): void;
   ready(): void;
 };
 
@@ -30,6 +30,7 @@ function pickTint(id: string): string {
 
 // ---- hover: tooltip + click-through hit-testing ----
 let overClawd = false;
+let tipSuppressed: HTMLElement | null = null;
 function liveClawdAt(target: EventTarget | null): HTMLElement | null {
   return target instanceof Element ? target.closest<HTMLElement>('.clawd:not(.leaving)') : null;
 }
@@ -40,7 +41,8 @@ document.addEventListener('mousemove', (e) => {
     overClawd = over;
     clawd.hover(over); // main stops ignoring the mouse only while this is true
   }
-  if (el) {
+  if (el !== tipSuppressed) tipSuppressed = null;
+  if (el && !tipSuppressed) {
     tip.textContent = el.dataset.tip ?? '';
     tip.hidden = false;
     // Keep the tooltip inside the window.
@@ -90,7 +92,11 @@ function upsert(s: Session) {
     });
     el.addEventListener('contextmenu', (e) => {
       e.preventDefault();
-      clawd.openDashboard(sessionId);
+      // The bubble takes the tooltip's place; keep the tooltip hidden until the pointer moves to another clawd.
+      tipSuppressed = el!;
+      tip.hidden = true;
+      const r = el!.getBoundingClientRect();
+      clawd.openDashboard(sessionId, { x: r.left + r.width / 2, top: r.top });
     });
     strip.appendChild(el);
     order.push(s.id);
