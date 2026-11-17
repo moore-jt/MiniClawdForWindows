@@ -2,7 +2,7 @@
 
 **Repository:** https://github.com/moore-jt/MiniClawdForWindows (public, open source)
 
-Completed work (milestones 1-5c, Tier 1) was cleared on 2026-11-16 after re-verification; see git history and README.md for what exists. In short: an Electron overlay strip above the taskbar, a localhost event bus (`127.0.0.1:47821`), Claude Code hooks plus installer, per-session animated clawds, hover tooltip, click-to-focus terminal, tray (Clear done / Launch at login / Quit), stale-session GC, and Notification filtering.
+Completed work (milestones 1-5c, Tier 1) was cleared on 2026-11-16 after re-verification; see git history and README.md for what exists. In short: an Electron overlay strip above the taskbar, a localhost event bus (`127.0.0.1:47821`), Claude Code hooks plus installer, an NSIS Windows installer (v0.1.0), per-session animated clawds, hover tooltip, click-to-focus terminal, tray (Clear done / Launch at login / Claude Code hooks / Quit), stale-session GC, and Notification filtering.
 
 ## Open Work
 
@@ -24,7 +24,7 @@ Completed work (milestones 1-5c, Tier 1) was cleared on 2026-11-16 after re-veri
 - Sounds (mutable) and subagent mini-clawds via `SubagentStop`.
 
 ### Distribution and polish
-- Installer: `npm run dist` builds an unsigned NSIS installer (hooks self-install on first run, staged in userData, removed on uninstall). Still to do: publish a GitHub release, code signing, auto-update, and a check that the Setup exe works end to end on a clean machine.
+- Installer: `npm run dist` builds an unsigned NSIS installer (hooks self-install on first run, staged in userData, removed on uninstall). v0.1.0 is published on GitHub Releases (cut with `gh release create`, which needs `gh` installed and logged in). Still to do: code signing, auto-update, and a check that the Setup exe works end to end on a clean machine.
 - Hooks need `node` on PATH; consider running the hook via the app's own exe so Node isn't required.
 - Port conflicts: port 47821 is fixed; make it configurable (and written into the hook) or add a fallback.
 - Guard against format drift in `~/.claude/sessions/<pid>.json` (undocumented; warns once today, add graceful fallback).
@@ -45,5 +45,7 @@ Completed work (milestones 1-5c, Tier 1) was cleared on 2026-11-16 after re-veri
 - The Clawd folder is its own git repo; never run git from the parent home-directory repo.
 - `.claude/` and `New Text Document.txt` are git-ignored on purpose.
 - Single-instance lock: if `npm start` says "already running", run `taskkill //F //IM electron.exe` (Git Bash) and retry.
+- The installed app and `npm start` both use port 47821 and show the same tray icon. Quit one (tray > Quit) before running the other.
+- Releases: bump `version` in package.json, `npm run dist`, then `gh release create vX.Y.Z "release/Mini Clawd Setup X.Y.Z.exe"`. In Git Bash, `gh` is at `/c/Program Files/GitHub CLI` and may not be on PATH.
 - The strip is empty until an event arrives; use `npm run test:bus` to see it.
 - `npm run snapshot <dir>` renders the renderer headlessly to PNGs.
