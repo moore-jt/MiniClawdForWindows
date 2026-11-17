@@ -20,7 +20,7 @@ const store = new SessionStore((change) => {
   strip?.webContents.send('sessions:change', change);
   dashboard?.notify();
 });
-const dashboard: Dashboard | null = new Dashboard(store);
+const dashboard: Dashboard | null = new Dashboard(store, app.getPath('userData'));
 
 // Right-click on a clawd (or tray "Dashboard...") opens the dashboard bubble. The renderer sends
 // the clawd's rectangle in strip coordinates; the strip's own position turns that into screen pixels.
@@ -198,6 +198,7 @@ app.whenReady().then(() => {
   warmUpFocusHelper();
   startEventBus(store);
   startSessionGc(store);
+  dashboard?.start();
   createTray();
   // Re-pin when the taskbar, resolution or DPI changes.
   screen.on('display-metrics-changed', reposition);

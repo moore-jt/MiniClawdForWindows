@@ -14,21 +14,57 @@
         <div id="name">n/a</div>
         <span id="state" class="pill"></span>
       </header>
-      <div class="grid">
-        <div><h2>Model</h2><div class="big" id="model">n/a</div></div>
-        <div><h2>Turns</h2><div class="big" id="turns">n/a</div></div>
-        <div><h2>Uptime</h2><div class="big" id="uptime">n/a</div></div>
+      <nav id="tabs">
+        <button class="tab active" data-tab="overview">Overview</button>
+        <button class="tab" data-tab="usage">Usage</button>
+        <button class="tab" data-tab="extras">Extras</button>
+      </nav>
+
+      <div class="panel" id="overview">
+        <div class="grid">
+          <div><h2>Model</h2><div class="big" id="model">n/a</div></div>
+          <div><h2>Turns</h2><div class="big" id="turns">n/a</div></div>
+          <div><h2>Uptime</h2><div class="big" id="uptime">n/a</div></div>
+        </div>
+        <h2>Context <span id="ctx-label"></span></h2>
+        <div class="meter"><div id="ctx-bar"></div></div>
+        <h2>This session</h2>
+        <table>
+          <tr><td>Input</td><td id="t-input">n/a</td></tr>
+          <tr><td>Output</td><td id="t-output">n/a</td></tr>
+          <tr><td>Cache read</td><td id="t-cread">n/a</td></tr>
+          <tr><td>Cache write</td><td id="t-cwrite">n/a</td></tr>
+          <tr class="total"><td>Est. cost</td><td id="t-cost">n/a</td></tr>
+        </table>
+        <p class="muted" id="cwd"></p>
       </div>
-      <h2>Context <span id="ctx-label"></span></h2>
-      <div class="meter"><div id="ctx-bar"></div></div>
-      <h2>Tokens</h2>
-      <table>
-        <tr><td>Input</td><td id="t-input">n/a</td></tr>
-        <tr><td>Output</td><td id="t-output">n/a</td></tr>
-        <tr><td>Cache read</td><td id="t-cread">n/a</td></tr>
-        <tr><td>Cache write</td><td id="t-cwrite">n/a</td></tr>
-      </table>
-      <p class="muted" id="cwd"></p>
+
+      <div class="panel" id="usage" hidden>
+        <div class="seg" id="periods">
+          <button class="active" data-period="today">Today</button>
+          <button data-period="week">7 days</button>
+          <button data-period="all">All time</button>
+        </div>
+        <div class="grid two">
+          <div><h2>Tokens</h2><div class="big" id="u-tokens">n/a</div></div>
+          <div><h2>Est. cost</h2><div class="big" id="u-cost">n/a</div></div>
+        </div>
+        <h2>By model</h2>
+        <table id="u-models"></table>
+        <h2>By project</h2>
+        <table id="u-projects"></table>
+        <p class="muted" id="u-note"></p>
+      </div>
+
+      <div class="panel" id="extras" hidden>
+        <table id="x-basics"></table>
+        <h2>Plugins</h2>
+        <ul id="x-plugins" class="list"></ul>
+        <h2>Skills</h2>
+        <ul id="x-skills" class="list"></ul>
+        <h2>MCP servers</h2>
+        <ul id="x-mcp" class="list"></ul>
+      </div>
     </section>
     <div id="tail"></div>
   </div>

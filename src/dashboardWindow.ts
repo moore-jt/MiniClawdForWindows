@@ -1,7 +1,10 @@
 import { BrowserWindow, screen } from 'electron';
 import * as path from 'path';
 import { Session, SessionStore } from './sessions';
-import { contextWindow, TranscriptReader, UsageTotals } from './usage';
+import { ClaudeConfig, readClaudeConfig } from './claudeConfig';
+import { Cost, costOfModels, loadPrices, Price } from './pricing';
+import { Period, RollupScanner, Slice } from './rollup';
+import { addCounts, contextWindow, Counts, TranscriptReader, UsageTotals, zeroCounts } from './usage';
 
 export interface DashboardSession {
   id: string;
@@ -9,13 +12,37 @@ export interface DashboardSession {
   cwd: string;
   startedAt: number;
   usage: UsageTotals | null;
+  /** Estimated cost of this session so far. */
+  cost: Cost | null;
   contextWindow: number;
+  config: ClaudeConfig;
+}
+
+export interface UsageRow {
+  name: string;
+  tokens: number;
+  cost: Cost;
+}
+export interface PeriodSummary {
+  tokens: number;
+  counts: Counts;
+  cost: Cost;
+  models: UsageRow[];
+  projects: UsageRow[];
 }
 
 export interface DashboardData {
   now: number;
   sessions: DashboardSession[];
+  rollup: Record<Period, PeriodSummary>;
+  scanning: boolean;
 }
+
+const sum = (c: Counts) => c.input + c.output + c.cacheRead + c.cacheCreate;
+const TOP_ROWS = 6;
+const SCAN_FIRST_MS = 3000;
+const SCAN_EVERY_MS = 10 * 60 * 1000;
+const CONFIG_TTL_MS = 30_000;
 
 /** Where the bubble's tail points: screen coordinates of the top-center of a clawd. */
 export interface Anchor {
@@ -42,7 +69,22 @@ export class Dashboard {
   private lastClosed = { id: '', at: 0 };
   private openId = '';
 
-  constructor(private store: SessionStore) {}
+  private scanner: RollupScanner;
+  private prices: Price[];
+  private configs = new Map<string, { at: number; cfg: ClaudeConfig }>();
+
+  /** @param dataDir app data folder (cache and editable price table live here) */
+  constructor(private store: SessionStore, dataDir: string) {
+    this.prices = loadPrices(dataDir);
+    this.scanner = new RollupScanner(path.join(dataDir, 'usage-cache.json'));
+  }
+
+  /** Starts the background history scan: soon after launch, then periodically. */
+  start() {
+    const run = () => this.scanner.scan().then(() => this.notify(), () => {});
+    setTimeout(run, SCAN_FIRST_MS).unref();
+    setInterval(run, SCAN_EVERY_MS).unref();
+  }
 
   /** Opens the bubble for a session; right-clicking the same clawd again closes it. */
   open(selectId?: string, anchor?: Anchor) {
@@ -110,7 +152,38 @@ export class Dashboard {
 
   async snapshot(): Promise<DashboardData> {
     const sessions = await Promise.all(this.store.list().map((s) => this.describe(s)));
-    return { now: Date.now(), sessions };
+    return { now: Date.now(), sessions, rollup: this.summarize(), scanning: this.scanner.isScanning };
+  }
+
+  private summarize(): Record<Period, PeriodSummary> {
+    const r = this.scanner.rollup();
+    const one = (s: Slice): PeriodSummary => {
+      const rows = (m: Record<string, Record<string, Counts>>): UsageRow[] =>
+        Object.entries(m)
+          .map(([name, byModel]) => {
+            const t = zeroCounts();
+            for (const c of Object.values(byModel)) addCounts(t, c);
+            return { name, tokens: sum(t), cost: costOfModels(this.prices, byModel) };
+          })
+          .sort((a, b) => b.tokens - a.tokens)
+          .slice(0, TOP_ROWS);
+      return {
+        tokens: sum(s.totals),
+        counts: s.totals,
+        cost: costOfModels(this.prices, s.byModel),
+        models: rows(Object.fromEntries(Object.entries(s.byModel).map(([k, v]) => [k, { [k]: v }]))),
+        projects: rows(s.byProject),
+      };
+    };
+    return { today: one(r.today), week: one(r.week), all: one(r.all) };
+  }
+
+  private configFor(cwd: string): ClaudeConfig {
+    const hit = this.configs.get(cwd);
+    if (hit && Date.now() - hit.at < CONFIG_TTL_MS) return hit.cfg;
+    const cfg = readClaudeConfig(cwd || undefined);
+    this.configs.set(cwd, { at: Date.now(), cfg });
+    return cfg;
   }
 
   // ---- placement ----
@@ -161,7 +234,9 @@ export class Dashboard {
       cwd: s.cwd,
       startedAt: s.startedAt,
       usage,
+      cost: usage ? costOfModels(this.prices, usage.byModel) : null,
       contextWindow: contextWindow(usage?.model ?? null),
+      config: this.configFor(s.cwd),
     };
   }
 

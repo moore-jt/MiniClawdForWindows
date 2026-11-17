@@ -45,6 +45,7 @@ test('UsageAccumulator sums, dedupes streamed ids, and skips junk', () => {
   acc.addLine(asst('m1', { input_tokens: 10, output_tokens: 50, cache_read_input_tokens: 100, cache_creation_input_tokens: 5 }));
   acc.addLine(asst('m2', { input_tokens: 20, output_tokens: 7 }));
   assert.equal(acc.addLine('{not json'), false);
+  assert.equal(acc.addLine(JSON.stringify({ type: 'assistant', message: { id: 'syn', model: '<synthetic>', usage: { input_tokens: 99 } } })), false);
   assert.equal(acc.addLine(line({ type: 'user', message: {} })), false);
   const t = acc.totals();
   assert.deepEqual(
@@ -129,5 +130,75 @@ test('readClaudeConfig reads settings, plugins, skills and MCP; tolerates junk; 
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(proj, { recursive: true, force: true });
+  }
+});
+
+test('pricing: matches by substring, unknown models are partial, bad file falls back', () => {
+  const { loadPrices, costOf, costOfModels, DEFAULT_PRICES } = require('../dist/pricing');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'clawd-price-'));
+  try {
+    const prices = loadPrices(dir); // creates prices.json
+    assert.ok(fs.existsSync(path.join(dir, 'prices.json')));
+    assert.deepEqual(prices, DEFAULT_PRICES);
+    const c = { input: 1e6, output: 1e6, cacheRead: 1e6, cacheCreate: 1e6 };
+    assert.equal(costOf(prices, 'claude-SONNET-x', c), 3 + 15 + 0.3 + 3.75);
+    assert.equal(costOf(prices, 'mystery', c), null);
+    assert.deepEqual(costOfModels(prices, { 'claude-haiku-x': c, mystery: c }), { usd: 1 + 5 + 0.1 + 1.25, partial: true });
+    fs.writeFileSync(path.join(dir, 'prices.json'), '{ nope');
+    assert.deepEqual(loadPrices(dir), DEFAULT_PRICES);
+    fs.writeFileSync(path.join(dir, 'prices.json'), JSON.stringify({ models: [{ match: 'x', input: 1, output: 2, cacheRead: 0, cacheWrite: 0 }] }));
+    assert.equal(loadPrices(dir)[0].match, 'x');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('RollupScanner buckets by day/model/project, replaces streamed repeats, resumes incrementally', async () => {
+  const { RollupScanner, localDay } = require('../dist/rollup');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'clawd-roll-'));
+  const root = path.join(dir, 'projects', 'C--p-alpha');
+  const cache = path.join(dir, 'cache.json');
+  fs.mkdirSync(root, { recursive: true });
+  const now = Date.now();
+  const ts = (daysAgo) => new Date(now - daysAgo * 86_400_000).toISOString();
+  const L = (id, daysAgo, usage, model = 'claude-sonnet-x') =>
+    JSON.stringify({ type: 'assistant', timestamp: ts(daysAgo), cwd: ['C:', 'p', 'alpha'].join(path.sep), message: { id, model, usage } }) + '\n';
+  try {
+    const file = path.join(root, 's.jsonl');
+    fs.writeFileSync(
+      file,
+      L('m1', 0, { input_tokens: 10, output_tokens: 1 }) +
+        L('m1', 0, { input_tokens: 10, output_tokens: 9 }) + // streamed repeat: replaces
+        L('m2', 3, { input_tokens: 100 }) +
+        L('m3', 40, { input_tokens: 1000 }, 'claude-opus-x') +
+        '{"type":"assistant","message":{"id":"half'
+    );
+    const s = new RollupScanner(cache, path.join(dir, 'projects'));
+    await s.scan();
+    let r = s.rollup(now);
+    assert.equal(r.today.totals.input, 10);
+    assert.equal(r.today.totals.output, 9);
+    assert.equal(r.week.totals.input, 110);
+    assert.equal(r.all.totals.input, 1110);
+    assert.equal(r.all.byModel['claude-opus-x'].input, 1000);
+    assert.equal(r.all.byProject['alpha']['claude-sonnet-x'].input, 110);
+
+    // Finish the half-written line, add a line, rescan from the persisted cache.
+    fs.appendFileSync(file, 'x","model":"claude-sonnet-x","usage":{"input_tokens":5}}}\n'); // still malformed json: ignored
+    fs.appendFileSync(file, L('m4', 0, { input_tokens: 7 }));
+    const s2 = new RollupScanner(cache, path.join(dir, 'projects'));
+    assert.equal(s2.rollup(now).all.totals.input, 1110); // served from cache before any scan
+    await s2.scan();
+    r = s2.rollup(now);
+    assert.equal(r.today.totals.input, 17);
+    assert.equal(r.all.totals.input, 1117); // nothing double counted
+
+    // Deleted transcripts stop counting.
+    fs.rmSync(file);
+    await s2.scan();
+    assert.equal(s2.rollup(now).all.totals.input, 0);
+    assert.ok(localDay(now).match(/^\d{4}-\d{2}-\d{2}$/));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 });
