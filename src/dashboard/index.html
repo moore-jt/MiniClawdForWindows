@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'">
+  <title>Mini Clawd</title>
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+  <header>
+    <select id="picker" aria-label="Session"></select>
+    <span id="state" class="pill"></span>
+  </header>
+  <nav>
+    <button class="tab active" data-tab="overview">Overview</button>
+    <!-- Usage, Skills and plugins, and Settings tabs come in later passes. -->
+  </nav>
+  <main id="overview">
+    <p id="empty" hidden>No Claude Code sessions yet. Start one and it will appear here.</p>
+    <section id="content" hidden>
+      <div class="grid">
+        <div class="card"><h2>Model</h2><div class="big" id="model">n/a</div></div>
+        <div class="card"><h2>Turns</h2><div class="big" id="turns">n/a</div></div>
+        <div class="card"><h2>Uptime</h2><div class="big" id="uptime">n/a</div></div>
+      </div>
+      <div class="card">
+        <h2>Context window <span id="ctx-label"></span></h2>
+        <div class="meter"><div id="ctx-bar"></div></div>
+      </div>
+      <div class="card">
+        <h2>Tokens (this session)</h2>
+        <table>
+          <tr><td>Input</td><td id="t-input">n/a</td></tr>
+          <tr><td>Output</td><td id="t-output">n/a</td></tr>
+          <tr><td>Cache read</td><td id="t-cread">n/a</td></tr>
+          <tr><td>Cache write</td><td id="t-cwrite">n/a</td></tr>
+        </table>
+      </div>
+      <p class="muted" id="cwd"></p>
+    </section>
+  </main>
+  <script src="dashboard.js"></script>
+</body>
+</html>

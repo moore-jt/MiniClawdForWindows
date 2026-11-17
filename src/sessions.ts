@@ -6,6 +6,10 @@ export interface Session {
   cwd: string;
   pid: number | null;
   lastSeen: number;
+  /** When we first heard from this session (ms epoch). */
+  startedAt: number;
+  /** Claude Code's transcript JSONL for this session, from the hook payload. */
+  transcriptPath?: string;
 }
 
 export type SessionChange =
@@ -16,6 +20,7 @@ export type SessionChange =
 export interface EventDetail {
   notificationType?: string;
   message?: string;
+  transcriptPath?: string;
 }
 
 /** Hook event name -> resulting state. SessionEnd is handled separately (removal). */
@@ -47,7 +52,17 @@ export class SessionStore {
     const state = EVENT_STATE[event];
     if (!state) return false;
     if (event === 'Notification' && !this.isBlockingNotification(id, detail)) return true;
-    const session: Session = { id, state, cwd, pid, lastSeen: Date.now() };
+    const prev = this.sessions.get(id);
+    const session: Session = {
+      id,
+      state,
+      cwd,
+      pid,
+      lastSeen: Date.now(),
+      startedAt: prev?.startedAt ?? Date.now(),
+      // Any event may carry the path; keep the last one we saw.
+      transcriptPath: detail.transcriptPath ?? prev?.transcriptPath,
+    };
     this.sessions.set(id, session);
     this.onChange({ type: 'upsert', session });
     return true;

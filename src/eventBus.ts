@@ -44,6 +44,7 @@ export function startEventBus(store: SessionStore, port = DEFAULT_PORT): http.Se
         const detail = {
           notificationType: typeof d.notification_type === 'string' ? d.notification_type : undefined,
           message: typeof d.message === 'string' ? d.message : undefined,
+          transcriptPath: typeof d.transcript_path === 'string' ? d.transcript_path : undefined,
         };
         res.writeHead(store.apply(d.session_id, d.event, cwd, pid, detail) ? 204 : 400).end();
       } catch {

@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { applyHooks, hooksCurrent, stageHookScript } from './hooksInstaller';
 import { SessionStore } from './sessions';
+import { Dashboard } from './dashboardWindow';
 import { startEventBus } from './eventBus';
 import { startSessionGc } from './gc';
 import { focusSessionWindow, forgetSessionWindow, warmUpFocusHelper, stopFocusHelper, prefetchSessionWindow } from './windowFocus';
@@ -12,10 +13,18 @@ const STRIP_HEIGHT = 72; // 36px clawd + room above it for the hover tooltip
 let strip: BrowserWindow | null = null;
 
 const store = new SessionStore((change) => {
-  if (change.type === 'remove') forgetSessionWindow(change.id);
-  else prefetchSessionWindow(change.session.id, change.session.pid).catch(() => {});
+  if (change.type === 'remove') {
+    forgetSessionWindow(change.id);
+    dashboard?.forget(change.id);
+  } else prefetchSessionWindow(change.session.id, change.session.pid).catch(() => {});
   strip?.webContents.send('sessions:change', change);
+  dashboard?.notify();
 });
+const dashboard: Dashboard | null = new Dashboard(store);
+
+// Right-click on a clawd (or tray "Dashboard...") opens the dashboard window.
+ipcMain.on('dashboard:open', (_e, id: unknown) => dashboard?.open(typeof id === 'string' ? id : undefined));
+ipcMain.handle('dashboard:get', () => dashboard?.snapshot());
 
 // Renderer asks for the current sessions once its listeners are attached.
 ipcMain.on('renderer:ready', (e) => e.sender.send('sessions:init', store.list()));
@@ -129,6 +138,7 @@ function createTray() {
     Menu.buildFromTemplate([
       { label: 'Mini Clawd', enabled: false },
       { type: 'separator' },
+      { label: 'Dashboard...', click: () => dashboard?.open() },
       {
         label: 'Clear done',
         click: () => store.removeWhere((s) => s.state === 'done'),
@@ -184,5 +194,6 @@ app.whenReady().then(() => {
   screen.on('display-removed', reposition);
 });
 
-app.on('window-all-closed', () => app.quit());
+// The strip window lives for the whole run, so closing the dashboard must not quit the app.
+app.on('window-all-closed', () => {});
 app.on('will-quit', stopFocusHelper);

@@ -6,6 +6,7 @@ declare const clawd: {
   onChange(cb: (c: Change) => void): void;
   hover(over: boolean): void;
   focus(id: string): Promise<boolean>;
+  openDashboard(id: string): void;
   ready(): void;
 };
 
@@ -87,12 +88,16 @@ function upsert(s: Session) {
         }, { once: true });
       }
     });
+    el.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      clawd.openDashboard(sessionId);
+    });
     strip.appendChild(el);
     order.push(s.id);
   }
   el.dataset.state = s.state;
   const folder = (s.cwd ?? '').split(/[\\/]/).filter(Boolean).pop() ?? s.id.slice(0, 8);
-  el.setAttribute('data-tip', `${folder} · ${s.state} · click to open`);
+  el.setAttribute('data-tip', `${folder} · ${s.state} · click to open � right-click for dashboard`);
   layout();
 }
 

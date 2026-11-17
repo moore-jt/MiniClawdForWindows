@@ -8,6 +8,7 @@
     "build": "tsc && node scripts/copy-static.js",
     "start": "npm run build && electron .",
     "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test scripts/test-units.js",
     "test:bus": "node scripts/test-bus.js",
     "snapshot": "npm run build && electron scripts/snapshot.js",
     "hooks:install": "npm run build && node scripts/hooks-installer.js install",
