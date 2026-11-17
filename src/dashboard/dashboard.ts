@@ -99,7 +99,8 @@ function fillList(ul: HTMLElement, items: { text: string; on?: boolean; src?: st
 
 function renderOverview(s: Sess) {
   const u = s.usage;
-  $('model').textContent = u?.model ?? 'n/a';
+  // Before the first reply there is no model in the transcript yet: show the configured default.
+  $('model').textContent = u?.model ?? s.config.model ?? 'n/a';
   $('turns').textContent = u ? fmt(u.turns) : 'n/a';
   $('uptime').textContent = uptime(data!.now - s.startedAt);
   $('t-input').textContent = fmt(u?.input);
@@ -141,8 +142,8 @@ function renderExtras(s: Sess) {
     tr.append(el('td', k), el('td', v));
     basics.append(tr);
   };
-  row('Default model', c.model ?? 'n/a');
-  row('Permission mode', c.permissionMode ?? 'n/a');
+  row('Default model', c.model ?? 'not set');
+  row('Permission mode', c.permissionMode ?? 'default');
   row('Hooks', c.hookEvents.length ? c.hookEvents.join(', ') : 'none');
   fillList(
     $('x-plugins'),

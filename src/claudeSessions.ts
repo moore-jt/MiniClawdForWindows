@@ -42,3 +42,34 @@ export function isPidAlive(pid: number): boolean {
     return (e as NodeJS.ErrnoException).code === 'EPERM'; // exists, just not ours to signal
   }
 }
+
+/** When Claude Code says a session started (ms epoch), from ~/.claude/sessions/<pid>.json, or null. */
+export function claudeStartedAt(sessionId: string): number | null {
+  try {
+    const dir = path.join(os.homedir(), '.claude', 'sessions');
+    for (const f of fs.readdirSync(dir)) {
+      if (!/^\d+\.json$/.test(f)) continue;
+      try {
+        const j = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+        if (j.sessionId === sessionId && typeof j.startedAt === 'number' && j.startedAt > 0) return j.startedAt;
+      } catch { /* unreadable or half-written file: skip */ }
+    }
+  } catch { /* no sessions dir */ }
+  return null;
+}
+
+/**
+ * Transcripts live at ~/.claude/projects/<encoded cwd>/<sessionId>.jsonl. Used when a session's
+ * hook events never carried transcript_path (e.g. it started before the hook was updated).
+ */
+export function findTranscript(sessionId: string): string | null {
+  if (!/^[\w-]+$/.test(sessionId)) return null; // ids become a file name: no path tricks
+  try {
+    const root = path.join(os.homedir(), '.claude', 'projects');
+    for (const d of fs.readdirSync(root)) {
+      const file = path.join(root, d, sessionId + '.jsonl');
+      if (fs.existsSync(file)) return file;
+    }
+  } catch { /* no projects dir */ }
+  return null;
+}

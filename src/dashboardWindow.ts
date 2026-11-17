@@ -2,6 +2,7 @@ import { BrowserWindow, screen } from 'electron';
 import * as path from 'path';
 import { Session, SessionStore } from './sessions';
 import { ClaudeConfig, readClaudeConfig } from './claudeConfig';
+import { claudeStartedAt, findTranscript } from './claudeSessions';
 import { Cost, costOfModels, loadPrices, Price } from './pricing';
 import { Period, RollupScanner, Slice } from './rollup';
 import { addCounts, contextWindow, Counts, TranscriptReader, UsageTotals, zeroCounts } from './usage';
@@ -43,6 +44,7 @@ const TOP_ROWS = 6;
 const SCAN_FIRST_MS = 3000;
 const SCAN_EVERY_MS = 10 * 60 * 1000;
 const CONFIG_TTL_MS = 30_000;
+const LOOKUP_RETRY_MS = 15_000;
 
 /** Where the bubble's tail points: screen coordinates of the top-center of a clawd. */
 export interface Anchor {
@@ -72,6 +74,8 @@ export class Dashboard {
   private scanner: RollupScanner;
   private prices: Price[];
   private configs = new Map<string, { at: number; cfg: ClaudeConfig }>();
+  /** Per-session facts we had to look up ourselves; retried at most every LOOKUP_RETRY_MS while missing. */
+  private lookups = new Map<string, { at: number; transcript: string | null; startedAt: number | null }>();
 
   /** @param dataDir app data folder (cache and editable price table live here) */
   constructor(private store: SessionStore, dataDir: string) {
@@ -148,6 +152,7 @@ export class Dashboard {
 
   forget(id: string) {
     this.readers.delete(id);
+    this.lookups.delete(id);
   }
 
   async snapshot(): Promise<DashboardData> {
@@ -222,17 +227,29 @@ export class Dashboard {
   // ---- data ----
 
   private async describe(s: Session): Promise<DashboardSession> {
+    // Fill gaps from Claude Code's own files: sessions that began before we were listening
+    // have no transcript path from the hooks and a "first seen" time that is too late.
+    let look = this.lookups.get(s.id);
+    if (!look || ((!look.transcript || !look.startedAt) && Date.now() - look.at > LOOKUP_RETRY_MS)) {
+      look = {
+        at: Date.now(),
+        transcript: look?.transcript ?? findTranscript(s.id),
+        startedAt: look?.startedAt ?? claudeStartedAt(s.id),
+      };
+      this.lookups.set(s.id, look);
+    }
+    const transcript = s.transcriptPath ?? look.transcript;
     let usage: UsageTotals | null = null;
-    if (s.transcriptPath) {
+    if (transcript) {
       let r = this.readers.get(s.id);
-      if (!r || r.file !== s.transcriptPath) this.readers.set(s.id, (r = new TranscriptReader(s.transcriptPath)));
+      if (!r || r.file !== transcript) this.readers.set(s.id, (r = new TranscriptReader(transcript)));
       usage = await r.update();
     }
     return {
       id: s.id,
       state: s.state,
       cwd: s.cwd,
-      startedAt: s.startedAt,
+      startedAt: Math.min(s.startedAt, look.startedAt ?? s.startedAt),
       usage,
       cost: usage ? costOfModels(this.prices, usage.byModel) : null,
       contextWindow: contextWindow(usage?.model ?? null),
