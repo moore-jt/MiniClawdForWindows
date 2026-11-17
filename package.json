@@ -10,12 +10,46 @@
     "typecheck": "tsc --noEmit",
     "test:bus": "node scripts/test-bus.js",
     "snapshot": "npm run build && electron scripts/snapshot.js",
-    "hooks:install": "node scripts/hooks-installer.js install",
-    "hooks:uninstall": "node scripts/hooks-installer.js uninstall"
+    "hooks:install": "npm run build && node scripts/hooks-installer.js install",
+    "hooks:uninstall": "npm run build && node scripts/hooks-installer.js uninstall",
+    "dist": "npm run build && electron-builder --win",
+    "dist:dir": "npm run build && electron-builder --win --dir"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
     "electron": "^45.3.0",
+    "electron-builder": "^26.18.0",
     "typescript": "^7.0.2"
+  },
+  "author": "Mini Clawd contributors",
+  "build": {
+    "appId": "com.miniclawd.windows",
+    "productName": "Mini Clawd",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "assets/**/*",
+      "hooks/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "deleteAppDataOnUninstall": false,
+      "include": "build/installer.nsh"
+    }
   }
 }

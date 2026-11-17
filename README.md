@@ -22,6 +22,14 @@ Every session gets its own color, and hovering a clawd shows its project folder.
 
 ## Install
 
+### Installer (recommended)
+
+Run `Mini Clawd Setup x.y.z.exe` (build it with `npm run dist`; the file lands in `release/`). It installs per-user, starts Mini Clawd, and on first run adds its hooks to `~/.claude/settings.json` (your file is backed up first). Turn on **Launch at login** from the tray menu and you never need a terminal again. Start a new Claude Code session and a clawd pops in.
+
+The hooks run with `node`, so [Node.js](https://nodejs.org) must be on your PATH (it is if you installed Claude Code through npm). Uninstalling removes the hooks again. The tray menu's **Claude Code hooks** checkbox adds or removes them any time.
+
+### From source
+
 You'll need Windows, [Node.js](https://nodejs.org), and [Claude Code](https://claude.com/claude-code).
 
 ```bash
@@ -52,12 +60,13 @@ node scripts/test-bus.js clear
 ## Troubleshooting
 
 - **"already running; exiting this copy"**: a stray Electron is alive. Run `taskkill /F /IM electron.exe` and start again.
-- **Moved the repo?** Re-run `npm run hooks:install`. The hook command stores an absolute path.
+- **Moved the repo (source install)?** Re-run `npm run hooks:install`. The hook command stores an absolute path. The installed app keeps its hook in `%APPDATA%Mini Clawdhooks`, so moving it is safe.
+- **Windows SmartScreen warns about the installer?** The build isn't code-signed. Choose *More info* then *Run anyway*.
 - **Electron failed to install?** Run `node node_modules/electron/install.js` and give it a few minutes.
 
 ## Status
 
-Early days. There's a tray icon (Clear done, Launch at login, Quit) and clawds whose Claude process died are cleaned up automatically. Still on the to-do list: a packaged installer. See [PLAN.md](PLAN.md) for the roadmap.
+Early days. There's a tray icon (Clear done, Launch at login, Quit) and clawds whose Claude process died are cleaned up automatically. There's an NSIS installer (`npm run dist`). See [PLAN.md](PLAN.md) for the roadmap.
 
 ## License
 

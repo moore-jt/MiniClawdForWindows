@@ -24,8 +24,8 @@ Completed work (milestones 1-5c, Tier 1) was cleared on 2026-11-16 after re-veri
 - Sounds (mutable) and subagent mini-clawds via `SubagentStop`.
 
 ### Distribution and polish
-- Packaging: `electron-builder` installer or portable `.exe` that registers the hooks itself; publish as a GitHub release.
-- Resilient hook install: copy `clawd-hook.js` to a stable location (e.g. `%APPDATA%`) so moving the repo doesn't break `settings.json`.
+- Installer: `npm run dist` builds an unsigned NSIS installer (hooks self-install on first run, staged in userData, removed on uninstall). Still to do: publish a GitHub release, code signing, auto-update, and a check that the Setup exe works end to end on a clean machine.
+- Hooks need `node` on PATH; consider running the hook via the app's own exe so Node isn't required.
 - Port conflicts: port 47821 is fixed; make it configurable (and written into the hook) or add a fallback.
 - Guard against format drift in `~/.claude/sessions/<pid>.json` (undocumented; warns once today, add graceful fallback).
 - Windows Terminal tab picking (UI Automation or title match); today only the window is raised.

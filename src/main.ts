@@ -1,5 +1,7 @@
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, screen, Tray } from 'electron';
+import * as fs from 'fs';
 import * as path from 'path';
+import { applyHooks, hooksCurrent, stageHookScript } from './hooksInstaller';
 import { SessionStore } from './sessions';
 import { startEventBus } from './eventBus';
 import { startSessionGc } from './gc';
@@ -72,6 +74,44 @@ function reposition() {
 // Kept in a module variable so the tray isn't garbage-collected (it would vanish).
 let tray: Tray | null = null;
 
+// ---- Claude Code hooks -------------------------------------------------------
+// Packaged builds copy the hook script to userData so settings.json keeps working
+// when the app is moved or updated. Dev checkouts point at hooks/ in the repo.
+const bundledHook = () => path.join(__dirname, '..', 'hooks', 'clawd-hook.js');
+const optOutFile = () => path.join(app.getPath('userData'), 'hooks-opt-out');
+
+function activeHookScript(): string {
+  return app.isPackaged ? stageHookScript(bundledHook(), path.join(app.getPath('userData'), 'hooks')) : bundledHook();
+}
+
+function hooksInstalled(): boolean {
+  try {
+    return hooksCurrent(activeHookScript());
+  } catch {
+    return false;
+  }
+}
+
+function setHooks(on: boolean) {
+  try {
+    if (on) {
+      fs.rmSync(optOutFile(), { force: true });
+      applyHooks('install', { hookScript: activeHookScript() });
+    } else {
+      fs.writeFileSync(optOutFile(), 'user removed the hooks from the tray; do not reinstall automatically');
+      applyHooks('uninstall');
+    }
+  } catch (e) {
+    console.error('[clawd] hook install/uninstall failed:', e);
+  }
+}
+
+/** Packaged first run (and after updates): wire up Claude Code unless the user opted out. */
+function ensureHooks() {
+  if (!app.isPackaged || fs.existsSync(optOutFile())) return;
+  setHooks(true);
+}
+
 /** Dev runs are `electron <app path>`, so the login item must pass the app path too. */
 function loginItemArgs() {
   return app.isPackaged ? {} : { path: process.execPath, args: [app.getAppPath()] };
@@ -99,6 +139,12 @@ function createTray() {
         checked: launchesAtLogin(),
         click: (item) => app.setLoginItemSettings({ openAtLogin: item.checked, ...loginItemArgs() }),
       },
+      {
+        label: 'Claude Code hooks',
+        type: 'checkbox',
+        checked: hooksInstalled(),
+        click: (item) => setHooks(item.checked),
+      },
       { type: 'separator' },
       { label: 'Quit', click: () => app.quit() },
     ]);
@@ -107,14 +153,26 @@ function createTray() {
   tray.on('click', () => tray?.popUpContextMenu(buildMenu()));
 }
 
+// Run by the uninstaller: take our hooks out of settings.json and exit without opening anything.
+const removingHooks = process.argv.includes('--remove-hooks');
+if (removingHooks) {
+  try {
+    applyHooks('uninstall');
+  } catch (e) {
+    console.error('[clawd] could not remove hooks:', e);
+  }
+  app.exit(0);
+}
+
 // Only one strip at a time: a second launch would fight over the port and cache.
-if (!app.requestSingleInstanceLock()) {
+if (!removingHooks && !app.requestSingleInstanceLock()) {
   console.error('[clawd] already running; exiting this copy');
   app.quit();
 }
 
 app.whenReady().then(() => {
-  if (!app.hasSingleInstanceLock()) return;
+  if (removingHooks || !app.hasSingleInstanceLock()) return;
+  ensureHooks();
   createStrip();
   warmUpFocusHelper();
   startEventBus(store);
