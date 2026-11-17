@@ -94,3 +94,40 @@ test('contextWindow defaults to 200k', () => {
   assert.equal(contextWindow(null), 200000);
   assert.equal(contextWindow('claude-x[1m]'), 1000000);
 });
+
+test('readClaudeConfig reads settings, plugins, skills and MCP; tolerates junk; hides env', () => {
+  const { readClaudeConfig, skillNameFromMarkdown } = require('../dist/claudeConfig');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'clawd-home-'));
+  const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'clawd-proj-'));
+  const w = (f, c) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, c); };
+  try {
+    w(path.join(home, '.claude', 'settings.json'), JSON.stringify({
+      model: 'sonnet', permissions: { defaultMode: 'plan' }, env: { SECRET: 'hunter2' },
+      hooks: { Stop: [], Notification: [] }, enabledPlugins: { 'a@m': true, 'b@m': false, 'ghost@m': true },
+    }));
+    w(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({
+      version: 2, plugins: { 'a@m': [{ scope: 'user', version: '1.2.3' }], 'b@m': [{ version: '0.1' }] },
+    }));
+    w(path.join(home, '.claude', 'skills', 'one', 'SKILL.md'), '---\nname: first-skill\ndescription: x\n---\nbody');
+    w(path.join(home, '.claude', 'skills', 'two', 'SKILL.md'), 'no frontmatter');
+    fs.mkdirSync(path.join(home, '.claude', 'skills', 'synced')); // not a skill: skipped
+    w(path.join(home, '.claude.json'), JSON.stringify({ mcpServers: { s1: { command: 'node' } } }));
+    w(path.join(proj, '.mcp.json'), '{ broken json');
+    w(path.join(proj, '.claude', 'skills', 'p', 'SKILL.md'), '---\nname: proj-skill\n---\n');
+
+    const c = readClaudeConfig(proj, home);
+    assert.equal(c.model, 'sonnet');
+    assert.equal(c.permissionMode, 'plan');
+    assert.deepEqual(c.hookEvents, ['Stop', 'Notification']);
+    assert.deepEqual(c.plugins.map((p) => [p.id, p.enabled, p.version]), [['a@m', true, '1.2.3'], ['b@m', false, '0.1'], ['ghost@m', true, undefined]]);
+    assert.deepEqual(c.skills.map((s) => [s.name, s.source]), [['first-skill', 'user'], ['proj-skill', 'project'], ['two', 'user']]);
+    assert.deepEqual(c.mcpServers, [{ name: 's1', source: 'user', transport: 'stdio' }]);
+    assert.ok(!JSON.stringify(c).includes('hunter2'));
+    // Nothing exists at all: empty, no throw.
+    assert.deepEqual(readClaudeConfig(undefined, path.join(home, 'nope')).plugins, []);
+    assert.equal(skillNameFromMarkdown('---\nname: "quoted"\n---'), 'quoted');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(proj, { recursive: true, force: true });
+  }
+});
