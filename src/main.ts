@@ -85,6 +85,18 @@ function createStrip() {
   // Click-through; forward lets us add hover handling later.
   strip.setIgnoreMouseEvents(true, { forward: true });
   strip.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+
+  // If the renderer dies or the window is closed, the app would keep running with no clawds and
+  // every session event would throw on a dead webContents. Rebuild the strip instead.
+  const win = strip;
+  const rebuild = () => {
+    if (strip !== win) return;
+    strip = null;
+    if (!win.isDestroyed()) win.destroy();
+    setTimeout(createStrip, 1000);
+  };
+  win.webContents.on('render-process-gone', rebuild);
+  win.on('closed', rebuild);
 }
 
 function reposition() {
