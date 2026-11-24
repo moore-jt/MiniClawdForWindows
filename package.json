@@ -1,6 +1,6 @@
 {
   "name": "mini-clawd-for-windows",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Tiny pixel clawds on your Windows taskbar that show what your Claude Code agents are doing.",
   "license": "MIT",
   "main": "dist/main.js",

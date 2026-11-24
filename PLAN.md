@@ -2,7 +2,7 @@
 
 **Repository:** https://github.com/moore-jt/MiniClawdForWindows (public, open source)
 
-Completed work (milestones 1-5c, Tier 1) was cleared on 2026-11-16 after re-verification; see git history and README.md for what exists. In short: an Electron overlay strip above the taskbar, a localhost event bus (`127.0.0.1:47821`), Claude Code hooks plus installer, an NSIS Windows installer (v0.2.1), per-session animated clawds, hover-to-open dashboard, click-to-focus terminal, tray (Clear done / Launch at login / Claude Code hooks / Quit), stale-session GC, and Notification filtering.
+Completed work (milestones 1-5c, Tier 1) was cleared on 2026-11-16 after re-verification; see git history and README.md for what exists. In short: an Electron overlay strip above the taskbar, a localhost event bus (`127.0.0.1:47821`), Claude Code hooks plus installer, an NSIS Windows installer (v0.3.0), per-session animated clawds, hover-to-open dashboard, click-to-focus terminal, tray (Clear done / Launch at login / Claude Code hooks / Quit), stale-session GC, and Notification filtering.
 
 ## Open Work
 
