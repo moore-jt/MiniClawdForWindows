@@ -22,7 +22,7 @@ const store = new SessionStore((change) => {
 });
 const dashboard: Dashboard | null = new Dashboard(store, app.getPath('userData'));
 
-// Right-click on a clawd (or tray "Dashboard...") opens the dashboard bubble. The renderer sends
+// Hovering a clawd (or tray "Dashboard...") opens the dashboard bubble. The renderer sends
 // the clawd's rectangle in strip coordinates; the strip's own position turns that into screen pixels.
 ipcMain.on('dashboard:open', (_e, id: unknown, rect: unknown) => {
   const r = rect as { x?: unknown; top?: unknown } | undefined;
@@ -31,8 +31,24 @@ ipcMain.on('dashboard:open', (_e, id: unknown, rect: unknown) => {
     b && typeof r?.x === 'number' && typeof r?.top === 'number'
       ? { x: b.x + r.x, top: b.y + r.top }
       : undefined;
+  hoveringClawd = true;
   dashboard?.open(typeof id === 'string' ? id : undefined, anchor);
 });
+// The dashboard opens on hover, so it closes when the pointer is neither on a clawd nor on the bubble.
+let hoveringClawd = false;
+let leaveTimer: NodeJS.Timeout | null = null;
+function watchPointer() {
+  if (leaveTimer) return;
+  leaveTimer = setInterval(() => {
+    if (hoveringClawd) return;
+    if (!dashboard?.isOpen() || !dashboard.containsPoint(screen.getCursorScreenPoint())) {
+      dashboard?.close();
+      if (leaveTimer) clearInterval(leaveTimer);
+      leaveTimer = null;
+    }
+  }, 250);
+}
+ipcMain.on('dashboard:leave', () => { hoveringClawd = false; watchPointer(); });
 ipcMain.handle('dashboard:get', () => dashboard?.snapshot());
 ipcMain.on('dashboard:fit', (_e, h: unknown) => typeof h === 'number' && dashboard?.fit(h));
 ipcMain.on('dashboard:close', () => dashboard?.close());

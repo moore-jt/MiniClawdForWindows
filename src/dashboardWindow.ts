@@ -90,7 +90,7 @@ export class Dashboard {
     setInterval(run, SCAN_EVERY_MS).unref();
   }
 
-  /** Opens the bubble for a session; right-clicking the same clawd again closes it. */
+  /** Opens the bubble for a session; hovering a clawd opens it. */
   open(selectId?: string, anchor?: Anchor) {
     const id = selectId ?? this.store.list()[0]?.id ?? '';
     // Clicking the strip blurs (and so closes) the bubble just before this call arrives.
@@ -130,6 +130,17 @@ export class Dashboard {
       this.win = null;
     });
     this.timer = setInterval(() => void this.push(), REFRESH_MS);
+  }
+
+  isOpen() {
+    return !!this.win && !this.win.isDestroyed();
+  }
+
+  /** True if a screen point is on the bubble (with a few px of slack for the gap above the clawd). */
+  containsPoint(p: { x: number; y: number }) {
+    if (!this.win || this.win.isDestroyed()) return false;
+    const b = this.win.getBounds();
+    return p.x >= b.x - 4 && p.x <= b.x + b.width + 4 && p.y >= b.y - 4 && p.y <= b.y + b.height + 4;
   }
 
   close() {

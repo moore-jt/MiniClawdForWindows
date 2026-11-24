@@ -8,5 +8,6 @@ contextBridge.exposeInMainWorld('clawd', {
   hover: (over: boolean) => ipcRenderer.send('strip:hover', over),
   focus: (id: string): Promise<boolean> => ipcRenderer.invoke('session:focus', id),
   openDashboard: (id: string, rect: { x: number; top: number }) => ipcRenderer.send('dashboard:open', id, rect),
+  leaveClawd: () => ipcRenderer.send('dashboard:leave'),
   ready: () => ipcRenderer.send('renderer:ready'),
 });

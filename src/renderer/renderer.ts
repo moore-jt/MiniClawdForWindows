@@ -7,11 +7,11 @@ declare const clawd: {
   hover(over: boolean): void;
   focus(id: string): Promise<boolean>;
   openDashboard(id: string, rect: { x: number; top: number }): void;
+  leaveClawd(): void;
   ready(): void;
 };
 
 const strip = document.getElementById('strip')!;
-const tip = document.getElementById('tip')!;
 const SLOT = 56; // px between clawds
 const order: string[] = [];
 
@@ -28,9 +28,10 @@ function pickTint(id: string): string {
   return PALETTE[i % PALETTE.length];
 }
 
-// ---- hover: tooltip + click-through hit-testing ----
+// ---- hover: dashboard + click-through hit-testing ----
 let overClawd = false;
-let tipSuppressed: HTMLElement | null = null;
+let hoverEl: HTMLElement | null = null;
+let openTimer: number | undefined;
 function liveClawdAt(target: EventTarget | null): HTMLElement | null {
   return target instanceof Element ? target.closest<HTMLElement>('.clawd:not(.leaving)') : null;
 }
@@ -41,19 +42,22 @@ document.addEventListener('mousemove', (e) => {
     overClawd = over;
     clawd.hover(over); // main stops ignoring the mouse only while this is true
   }
-  if (el !== tipSuppressed) tipSuppressed = null;
-  if (el && !tipSuppressed) {
-    tip.textContent = el.dataset.tip ?? '';
-    tip.hidden = false;
-    // Keep the tooltip inside the window.
-    const x = Math.min(el.offsetLeft, document.documentElement.clientWidth - tip.offsetWidth - 4);
-    tip.style.left = Math.max(2, x) + 'px';
-  } else {
-    tip.hidden = true;
+  if (el !== hoverEl) {
+    hoverEl = el;
+    clearTimeout(openTimer);
+    if (el) {
+      // Short delay so sweeping the pointer across the strip doesn't flash the dashboard.
+      openTimer = window.setTimeout(() => {
+        const r = el.getBoundingClientRect();
+        clawd.openDashboard(el.dataset.sid ?? '', { x: r.left + r.width / 2, top: r.top });
+      }, 150);
+    } else {
+      clawd.leaveClawd();
+    }
   }
 });
 document.addEventListener('mouseleave', () => {
-  tip.hidden = true;
+  if (hoverEl) { hoverEl = null; clearTimeout(openTimer); clawd.leaveClawd(); }
   if (overClawd) { overClawd = false; clawd.hover(false); }
 });
 
@@ -90,20 +94,12 @@ function upsert(s: Session) {
         }, { once: true });
       }
     });
-    el.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      // The bubble takes the tooltip's place; keep the tooltip hidden until the pointer moves to another clawd.
-      tipSuppressed = el!;
-      tip.hidden = true;
-      const r = el!.getBoundingClientRect();
-      clawd.openDashboard(sessionId, { x: r.left + r.width / 2, top: r.top });
-    });
     strip.appendChild(el);
     order.push(s.id);
   }
   el.dataset.state = s.state;
   const folder = (s.cwd ?? '').split(/[\\/]/).filter(Boolean).pop() ?? s.id.slice(0, 8);
-  el.setAttribute('data-tip', `${folder} · ${s.state} · click to open � right-click for dashboard`);
+  el.dataset.sid = s.id;
   layout();
 }
 
