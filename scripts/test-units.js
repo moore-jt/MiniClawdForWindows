@@ -202,3 +202,26 @@ test('RollupScanner buckets by day/model/project, replaces streamed repeats, res
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('attention: badge priority, fullscreen states, badge painting, mute flag', () => {
+  const { badgeFor, coversScreen, paintBadge, FlagFile } = require('../dist/attention');
+  assert.strictEqual(badgeFor([]), null);
+  assert.strictEqual(badgeFor([{ state: 'working' }, { state: 'idle' }]), null);
+  assert.strictEqual(badgeFor([{ state: 'done' }, { state: 'working' }]), 'done');
+  assert.strictEqual(badgeFor([{ state: 'done' }, { state: 'needs-you' }]), 'needs-you');
+  assert.deepStrictEqual([1, 2, 3, 4, 5, null].map(coversScreen), [false, true, true, true, false, false]);
+
+  const src = Buffer.alloc(16 * 16 * 4); // transparent
+  const out = paintBadge(src, 16, 'done');
+  assert.strictEqual(src.readUInt8(15 * 64 + 15 * 4 + 3), 0, 'input untouched');
+  assert.strictEqual(out.readUInt8(13 * 64 + 13 * 4 + 3), 255, 'bottom-right is painted');
+  assert.strictEqual(out.readUInt8(0 * 64 + 0 * 4 + 3), 0, 'top-left stays transparent');
+
+  const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'clawd-')), 'muted');
+  const flag = new FlagFile(f);
+  assert.strictEqual(flag.get(), false);
+  flag.set(true);
+  assert.strictEqual(new FlagFile(f).get(), true);
+  flag.set(false);
+  assert.strictEqual(flag.get(), false);
+});

@@ -20,6 +20,8 @@ Run five Claude Code sessions at once and you'll eventually forget which one is 
 
 Every session gets its own color, and hovering a clawd opens its dashboard. **Click a clawd to bring its terminal window to the front** (if the window can't be found, the clawd shakes). In Windows Terminal this raises the window but can't pick the tab. Clicks anywhere else pass straight through to your apps.
 
+When a session finishes or needs you, its terminal's taskbar button flashes until you switch to it, and the tray icon gets a dot (amber: needs you, green: done; hover for counts). Tick **Mute taskbar flash** in the tray menu to silence the flash. While a fullscreen app (game, F11 video, presentation) is up, the strip hides itself and comes back afterwards; the tray dot still shows what's waiting.
+
 ## Install
 
 ### Installer (recommended)
@@ -67,7 +69,7 @@ node scripts/test-bus.js clear
 
 ## Status
 
-Early days. There's a tray icon (Clear done, Launch at login, Quit) and clawds whose Claude process died are cleaned up automatically. The first installer release (v0.1.0) is out on the [Releases page](https://github.com/moore-jt/MiniClawdForWindows/releases). It's unsigned for now. See [PLAN.md](PLAN.md) for the roadmap.
+Early days. There's a tray icon (Clear done, Mute taskbar flash, Launch at login, Quit) and clawds whose Claude process died are cleaned up automatically. The first installer release (v0.1.0) is out on the [Releases page](https://github.com/moore-jt/MiniClawdForWindows/releases). It's unsigned for now. See [PLAN.md](PLAN.md) for the roadmap.
 
 ## License
 

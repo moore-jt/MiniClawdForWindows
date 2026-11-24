@@ -20,6 +20,10 @@ Add-Type -Namespace W -Name N -MemberDefinition @'
 [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow();
 [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr h, uint f);
 [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+[DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+[DllImport("user32.dll")] public static extern bool FlashWindowEx(ref FLASHWINFO p);
+[DllImport("shell32.dll")] public static extern int SHQueryUserNotificationState(out int s);
+[StructLayout(LayoutKind.Sequential)] public struct FLASHWINFO { public uint cbSize; public IntPtr hwnd; public uint dwFlags; public uint uCount; public uint dwTimeout; }
 '@
 # The window of the console a process is attached to. Works for Windows Terminal (ConPTY) and
 # classic conhost windows, including shells launched from Explorer whose ancestors own no window.
@@ -33,7 +37,7 @@ function ConsoleHwnd($p) {
   if ($r -ne [IntPtr]::Zero -and [W.N]::IsWindowVisible($r)) { return $r }
   return [IntPtr]::Zero
 }
-function Focus($cached, $p, $resolveOnly) {
+function Focus($cached, $p, $mode) {
   $h = [IntPtr]::Zero
   if ($cached -ne 0 -and [W.N]::IsWindow([IntPtr]$cached)) { $h = [IntPtr]$cached }
   else {
@@ -53,7 +57,17 @@ function Focus($cached, $p, $resolveOnly) {
     }
   }
   if ($h -eq [IntPtr]::Zero) { return 'fail' }
-  if ($resolveOnly) { return 'ok:' + $h.ToInt64() }
+  if ($mode -eq 'r') { return 'ok:' + $h.ToInt64() }
+  if ($mode -eq 'f') {
+    # Flash the taskbar button until the window is brought forward; skip if it already is.
+    if ([W.N]::GetForegroundWindow() -ne $h) {
+      $f = New-Object W.N+FLASHWINFO
+      $f.cbSize = [uint32][Runtime.InteropServices.Marshal]::SizeOf($f)
+      $f.hwnd = $h; $f.dwFlags = 14; $f.uCount = 0; $f.dwTimeout = 0   # TRAY | TIMERNOFG
+      [W.N]::FlashWindowEx([ref]$f) | Out-Null
+    }
+    return 'ok:' + $h.ToInt64()
+  }
   if ([W.N]::IsIconic($h)) { [W.N]::ShowWindow($h, 9) | Out-Null }
   # Tapping Alt lets SetForegroundWindow succeed even when Windows would otherwise only flash the taskbar.
   [W.N]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero)
@@ -67,7 +81,10 @@ while ($true) {
   if ($null -eq $line) { break }
   $parts = $line.Trim().Split(' ')
   $r = 'fail'
-  try { $r = Focus ([int64]$parts[0]) ([int]$parts[1]) ($parts[2] -eq 'r') } catch { }
+  try {
+    if ($parts[0] -eq 'q') { $n = 0; [W.N]::SHQueryUserNotificationState([ref]$n) | Out-Null; $r = 'q:' + $n }
+    else { $r = Focus ([int64]$parts[0]) ([int]$parts[1]) $parts[2] }
+  } catch { }
   [Console]::Out.WriteLine($r); [Console]::Out.Flush()
 }
 `;
@@ -128,7 +145,7 @@ export function stopFocusHelper() {
   psReady = null;
 }
 
-async function ask(cached: number, pid: number, resolveOnly = false): Promise<string> {
+async function ask(cached: number, pid: number, mode: '' | 'r' | 'f' = ''): Promise<string> {
   await startHelper();
   const child = ps;
   if (!child || !child.stdin?.writable) return 'fail';
@@ -139,7 +156,7 @@ async function ask(cached: number, pid: number, resolveOnly = false): Promise<st
       timer: setTimeout(() => { child.kill(); }, 8000),
     };
     pending.push(entry);
-    child.stdin!.write(`${cached} ${pid}\n`);
+    child.stdin!.write(`${cached} ${pid} ${mode}\n`);
   });
 }
 
@@ -178,10 +195,40 @@ export async function prefetchSessionWindow(sessionId: string, hookPid: number |
   if (hwndCache.has(sessionId)) return;
   const pid = claudePidFor(sessionId) ?? hookPid;
   if (!Number.isInteger(pid)) return;
-  const m = /^ok:(\d+)$/.exec(await ask(0, pid as number, true));
+  const m = /^ok:(\d+)$/.exec(await ask(0, pid as number, 'r'));
   if (m) hwndCache.set(sessionId, Number(m[1]));
 }
 
 export function forgetSessionWindow(sessionId: string) {
   hwndCache.delete(sessionId);
+}
+
+/** Flashes a session's terminal taskbar button until the user switches to it. Never rejects. */
+export async function flashSessionWindow(sessionId: string, hookPid: number | null): Promise<void> {
+  const cached = hwndCache.get(sessionId) ?? 0;
+  const pid = claudePidFor(sessionId) ?? hookPid;
+  if (!Number.isInteger(pid) && !cached) return;
+  try {
+    const m = /^ok:(\d+)$/.exec(await ask(cached, Number.isInteger(pid) ? (pid as number) : 0, 'f'));
+    if (m) hwndCache.set(sessionId, Number(m[1]));
+  } catch {
+    // Flashing is a nicety; ignore failures.
+  }
+}
+
+/** Windows' SHQueryUserNotificationState value, or null if the helper can't answer. */
+export async function queryNotificationState(): Promise<number | null> {
+  try {
+    await startHelper();
+    const child = ps;
+    if (!child || !child.stdin?.writable) return null;
+    const out = await new Promise<string>((resolve) => {
+      pending.push({ resolve, timer: setTimeout(() => child.kill(), 8000) });
+      child.stdin!.write('q\n');
+    });
+    const m = /^q:(-?\d+)$/.exec(out);
+    return m ? Number(m[1]) : null;
+  } catch {
+    return null;
+  }
 }

@@ -6,17 +6,32 @@ import { SessionStore } from './sessions';
 import { Dashboard } from './dashboardWindow';
 import { startEventBus } from './eventBus';
 import { startSessionGc } from './gc';
-import { focusSessionWindow, forgetSessionWindow, warmUpFocusHelper, stopFocusHelper, prefetchSessionWindow } from './windowFocus';
+import { focusSessionWindow, forgetSessionWindow, warmUpFocusHelper, stopFocusHelper, prefetchSessionWindow, flashSessionWindow, queryNotificationState } from './windowFocus';
+import { badgeFor, coversScreen, FlagFile, paintBadge } from './attention';
 
 const STRIP_HEIGHT = 72; // 36px clawd + room above it for the hover tooltip
 
 let strip: BrowserWindow | null = null;
 
+// Tray "Mute" silences the taskbar flash (and any future sounds). Persisted across runs.
+const muted = new FlagFile(path.join(app.getPath('userData'), 'muted'));
+const lastState = new Map<string, string>();
+
 const store = new SessionStore((change) => {
   if (change.type === 'remove') {
+    lastState.delete(change.id);
     forgetSessionWindow(change.id);
     dashboard?.forget(change.id);
-  } else prefetchSessionWindow(change.session.id, change.session.pid).catch(() => {});
+  } else {
+    const { id, state, pid } = change.session;
+    prefetchSessionWindow(id, pid).catch(() => {});
+    // Flash the terminal's taskbar button when a session starts waiting on the user.
+    if ((state === 'done' || state === 'needs-you') && lastState.get(id) !== state && !muted.get()) {
+      flashSessionWindow(id, pid).catch(() => {});
+    }
+    lastState.set(id, state);
+  }
+  updateBadge();
   strip?.webContents.send('sessions:change', change);
   dashboard?.notify();
 });
@@ -68,6 +83,42 @@ ipcMain.handle('session:focus', (_e, id: unknown) => {
   return s ? focusSessionWindow(s.id, s.pid) : false;
 });
 
+// ---- attention badge + fullscreen ---------------------------------------------
+// A colored dot on the tray icon (amber: a session needs you, green: one finished) doubles as the
+// fallback signal while the strip is hidden under a fullscreen app.
+let trayBase: Electron.NativeImage | null = null;
+let shownBadge: string | null | undefined;
+
+function updateBadge() {
+  if (!tray || !trayBase) return;
+  const sessions = store.list();
+  const badge = badgeFor(sessions);
+  const needs = sessions.filter((s) => s.state === 'needs-you').length;
+  const done = sessions.filter((s) => s.state === 'done').length;
+  tray.setToolTip(
+    needs || done
+      ? `Mini Clawd: ${[needs && `${needs} need you`, done && `${done} done`].filter(Boolean).join(', ')}`
+      : 'Mini Clawd'
+  );
+  if (badge === shownBadge) return;
+  shownBadge = badge;
+  if (!badge) return void tray.setImage(trayBase);
+  const { width, height } = trayBase.getSize();
+  tray.setImage(nativeImage.createFromBitmap(paintBadge(trayBase.toBitmap(), width, badge), { width, height }));
+}
+
+let stripHidden = false;
+/** Hides the strip while a fullscreen app owns the screen (it would otherwise draw over it). */
+function watchFullscreen() {
+  setInterval(async () => {
+    const hide = coversScreen(await queryNotificationState());
+    if (hide === stripHidden || !strip || strip.isDestroyed()) return;
+    stripHidden = hide;
+    if (hide) strip.hide();
+    else strip.showInactive();
+  }, 2000).unref();
+}
+
 /** Rectangle for the strip: full width of the work area, sitting just above the taskbar. */
 function stripBounds() {
   const { workArea } = screen.getPrimaryDisplay();
@@ -80,6 +131,7 @@ function stripBounds() {
 }
 
 function createStrip() {
+  stripHidden = false; // a fresh window starts visible
   strip = new BrowserWindow({
     ...stripBounds(),
     transparent: true,
@@ -171,6 +223,7 @@ function launchesAtLogin(): boolean {
 
 function createTray() {
   const icon = nativeImage.createFromPath(path.join(__dirname, '..', 'assets', 'tray.png'));
+  trayBase = icon;
   tray = new Tray(icon);
   tray.setToolTip('Mini Clawd');
   const buildMenu = () =>
@@ -181,6 +234,12 @@ function createTray() {
       {
         label: 'Clear done',
         click: () => store.removeWhere((s) => s.state === 'done'),
+      },
+      {
+        label: 'Mute taskbar flash',
+        type: 'checkbox',
+        checked: muted.get(),
+        click: (item) => muted.set(item.checked),
       },
       {
         label: 'Launch at login',
@@ -228,6 +287,8 @@ app.whenReady().then(() => {
   startSessionGc(store);
   dashboard?.start();
   createTray();
+  updateBadge();
+  watchFullscreen();
   // Re-pin when the taskbar, resolution or DPI changes.
   screen.on('display-metrics-changed', reposition);
   screen.on('display-added', reposition);

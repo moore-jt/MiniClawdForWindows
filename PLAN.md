@@ -2,44 +2,47 @@
 
 **Repository:** https://github.com/moore-jt/MiniClawdForWindows (public, open source)
 
-Completed work (milestones 1-5c, Tier 1) was cleared on 2026-11-16 after re-verification; see git history and README.md for what exists. In short: an Electron overlay strip above the taskbar, a localhost event bus (`127.0.0.1:47821`), Claude Code hooks plus installer, an NSIS Windows installer (v0.1.0), per-session animated clawds, hover tooltip, click-to-focus terminal, tray (Clear done / Launch at login / Claude Code hooks / Quit), stale-session GC, and Notification filtering.
+Completed work (milestones 1-5c, Tier 1) was cleared on 2026-11-16 after re-verification; see git history and README.md for what exists. In short: an Electron overlay strip above the taskbar, a localhost event bus (`127.0.0.1:47821`), Claude Code hooks plus installer, an NSIS Windows installer (v0.2.1), per-session animated clawds, hover-to-open dashboard, click-to-focus terminal, tray (Clear done / Launch at login / Claude Code hooks / Quit), stale-session GC, and Notification filtering.
 
 ## Open Work
 
 ### Needs your on-screen check
-- Hover tooltip look, and clicks passing through the strip to apps underneath.
+- Hover-to-open dashboard feel (150 ms open delay, closes shortly after the pointer leaves the clawd and bubble), and clicks passing through the strip to apps underneath.
 - Click-to-focus speedup (persistent PowerShell) feels fast.
 - Esc-interrupt: does a clawd stay on `working`? If `Stop` fires, the 15-min working timeout in `src/gc.ts` is unnecessary; if not, shorten it or add `PreToolUse`/`PostToolUse` hooks.
 - Known gap: after approving a permission prompt, the clawd stays needs-you until `Stop` (nothing fires in between).
 
-### Milestone 6: Native extras
-- Taskbar flash and overlay badge (`ITaskbarList3`) on done.
-- Tray Mute.
-- Hide the strip or fall back to the badge under fullscreen apps.
+### Milestone 6: Native extras (implemented, awaiting your on-screen check)
+- Taskbar flash: the persistent PowerShell helper calls `FlashWindowEx` on the session's terminal window when it goes `done`/`needs-you` (skipped if that window is already foreground). Shipped as a flash on the terminal's button rather than an `ITaskbarList3` overlay, because the strip has no taskbar button of its own and one process can't reliably badge another's.
+- Badge: the tray icon gets an amber (needs-you) or green (done) dot, with counts in the tooltip (`src/attention.ts`).
+- Tray "Mute taskbar flash", persisted as a `muted` file in userData; also the switch for future sounds (Milestone 8).
+- Fullscreen: every 2 s the helper asks `SHQueryUserNotificationState`; states 2/3/4 hide the strip, and it returns when they clear. The tray dot is the fallback signal.
+- Also fixed: session-window prefetch was raising the terminal (it never sent the resolve-only flag).
+- To check on screen: flash appears only when the terminal is in the background; dot colors read well on your tray; strip hides under a fullscreen video/game and comes back.
 
-### Milestone 6b: Dashboard (right-click a clawd)
-A normal, resizable BrowserWindow (not the click-through strip) opened by right-clicking a clawd. A second right-click focuses the existing window. Also reachable from the tray ("Dashboard...").
+### Milestone 6b: Dashboard (hover a clawd)
+A bubble window (not the click-through strip) that opens when the pointer hovers a clawd and closes when it leaves both the clawd and the bubble (or on blur). Also reachable from the tray ("Dashboard...").
 
 **Data sources** (all read-only, local, nothing sent anywhere):
 - *Token usage and model:* every hook payload carries `transcript_path`. Store it on `Session` (new field, set from any event). The transcript is JSONL; each assistant line has `message.model` and `message.usage` (`input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`). Sum per session, tail-read incrementally (remember the byte offset) so large files are cheap. Dedupe by `message.id` (streamed messages repeat). Context-window fill = latest turn's input + cache tokens vs. the model's window.
-- *Rollups:* today / last 7 days / all time, by model and by project (`cwd`), scanned from `~/.claude/projects/**/*.jsonl` on a background timer, cached to userData so startup is instant. Estimated cost from a small editable price table (clearly labelled "estimate").
+- *Rollups:* today / last 7 days / all time, by model and by project (`cwd`), scanned from `~/.claude/projects/**/*.jsonl` on a background timer, cached to userData so startup is instant.
 - *Skills, plugins, MCP, hooks:* `~/.claude/settings.json` (`enabledPlugins`, `hooks`, `permissions`, `model`, `env`), `~/.claude/plugins/installed_plugins.json`, `~/.claude/skills/*/SKILL.md` plus project `.claude/skills` and `.mcp.json` for the selected session's `cwd`. Show name, source (user / project / plugin) and enabled state.
 - *Session stats:* state, cwd, git branch, uptime, turns, tool-call counts, time spent working vs. waiting on you (derived from our own state transitions, kept in `SessionStore`).
 - *App settings:* hooks installed, launch at login, port, version, event bus health (last event time, events/min).
 
-**Layout:** header with the selected clawd and its state; tabs: Overview (tokens, context fill, model, cost estimate, sparkline of tokens over time), Usage (rollups and per-model/project breakdown), Skills and plugins, Settings (read-only view of the relevant Claude Code settings plus our app toggles). A session picker at top, defaulting to the clawd that was clicked.
+**Layout:** header with the selected clawd and its state; tabs: Overview (tokens, context fill, model, sparkline of tokens over time), Usage (rollups and per-model/project breakdown), Skills and plugins, Settings (read-only view of the relevant Claude Code settings plus our app toggles). A session picker at top, defaulting to the clawd that was clicked.
 
 **Implementation steps:**
 1. Extend hook payload handling and `Session` with `transcriptPath`; unit-test the transitions.
 2. `src/usage.ts`: incremental transcript parser and rollup cache, with tests against fixture JSONL (including malformed and half-written lines).
 3. `src/claudeConfig.ts`: tolerant readers for settings, plugins, skills and MCP (same graceful-fallback rule as `claudeSessions.ts`: warn once on format drift, never throw).
 4. `src/dashboard/` window (own HTML/CSS/TS, same CSP: no inline scripts) plus IPC through `preload.ts` (`dashboard:get`, `dashboard:subscribe` for live updates while open).
-5. Renderer: right-click handler on a clawd opens the dashboard for that session. Make sure the strip's click-through regions still treat right-click correctly.
+5. Renderer: hovering a clawd opens the dashboard for that session (the tooltip and right-click menu were removed).
 6. Extend `npm run snapshot` to render the dashboard headlessly for review.
 
 **Open questions:**
 - Transcript format is internal and undocumented (like the sessions files), so everything degrades to "n/a" rather than failing.
-- Cost needs a price table that will go stale; decide whether to show cost at all or tokens only.
+- Decision: cost is out of scope. Show tokens only; no further cost work (the price table would go stale).
 - Large histories: confirm the first full scan stays fast and off the main thread (worker or chunked async).
 
 ### Milestone 7: Robustness
